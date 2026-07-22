@@ -4,7 +4,7 @@ on:
   schedule:
     # Corre todos los días a las 07:00 UTC (01:00 hora de Guatemala).
     # Cambiá el número si querés otra hora: es formato "minuto hora * * *" en UTC.
-    - cron: "0 7 * * *"
+    - cron: "0 14 * * *"
   workflow_dispatch: {}  # permite correrlo manualmente desde GitHub cuando quieras
 
 jobs:
