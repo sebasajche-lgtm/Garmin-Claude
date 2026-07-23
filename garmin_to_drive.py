@@ -57,6 +57,11 @@ CSV_COLUMNS = [
     "estres_promedio",
     "actividad_tipo",
     "actividad_duracion_min",
+    "actividad_distancia_km",
+    "actividad_ritmo_min_km",
+    "actividad_fc_promedio",
+    "actividad_fc_maxima",
+    "actividad_desnivel_positivo_m",
     "minutos_intensidad_semana",
     "training_readiness",
     "hrv_promedio_ms",
@@ -139,6 +144,24 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
             fila["actividad_duracion_min"] = round(
                 sum(a.get("duration", 0) for a in lista) / 60, 1
             )
+
+            distancia_m = principal.get("distance")
+            if distancia_m:
+                fila["actividad_distancia_km"] = round(distancia_m / 1000, 2)
+
+            velocidad_media = principal.get("averageSpeed")  # metros/segundo
+            if velocidad_media and velocidad_media > 0:
+                # Convertimos velocidad (m/s) a ritmo (minutos por kilómetro),
+                # que es como normalmente se habla de ritmo en carrera.
+                seg_por_km = 1000 / velocidad_media
+                fila["actividad_ritmo_min_km"] = f"{int(seg_por_km // 60)}:{int(seg_por_km % 60):02d}"
+
+            fila["actividad_fc_promedio"] = principal.get("averageHR")
+            fila["actividad_fc_maxima"] = principal.get("maxHR")
+
+            desnivel = principal.get("elevationGain")
+            if desnivel is not None:
+                fila["actividad_desnivel_positivo_m"] = round(desnivel, 0)
     except Exception as e:
         print(f"[aviso] No se pudo obtener actividad del día: {e}")
 
