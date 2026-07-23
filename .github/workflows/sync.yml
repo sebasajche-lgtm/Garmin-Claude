@@ -2,10 +2,20 @@ name: Sincronizar datos de Garmin a Google Drive
 
 on:
   schedule:
-    # Corre todos los días a las 07:00 UTC (01:00 hora de Guatemala).
+    # Corre todos los días a las 14:00 UTC (08:00 hora de Guatemala).
     # Cambiá el número si querés otra hora: es formato "minuto hora * * *" en UTC.
+    # Guatemala está 6 horas detrás de UTC (no cambia con horario de verano).
     - cron: "0 14 * * *"
-  workflow_dispatch: {}  # permite correrlo manualmente desde GitHub cuando quieras
+  workflow_dispatch:  # permite correrlo manualmente desde GitHub cuando quieras
+    inputs:
+      fecha_inicio:
+        description: "Fecha inicio (YYYY-MM-DD). Dejar vacío para correr solo hoy."
+        required: false
+        default: ""
+      fecha_fin:
+        description: "Fecha fin (YYYY-MM-DD). Dejar vacío si solo pusiste fecha_inicio (un solo día)."
+        required: false
+        default: ""
 
 jobs:
   sync:
@@ -28,4 +38,4 @@ jobs:
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python garmin_to_drive.py
+        run: python garmin_to_drive.py ${{ inputs.fecha_inicio }} ${{ inputs.fecha_fin }}
