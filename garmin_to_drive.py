@@ -54,6 +54,14 @@ CSV_COLUMNS = [
     "body_battery_max",
     "body_battery_min",
     "estres_promedio",
+    "actividad_tipo",
+    "actividad_duracion_min",
+    "minutos_intensidad_semana",
+    "training_readiness",
+    "hrv_promedio_ms",
+    "hrv_estado",
+    "respiracion_promedio",
+    "vo2_max",
 ]
 
 
@@ -124,6 +132,70 @@ def obtener_datos_garmin(fecha_str: str) -> dict:
         fila["estres_promedio"] = stats.get("averageStressLevel")
     except Exception:
         pass
+
+    # --- Actividad registrada del día (ej. caminata, ciclismo) ---
+    try:
+        actividades = api.get_activities_fordate(fecha_str)
+        lista = (actividades or {}).get("ActivitiesForDay", {}).get("payload", [])
+        if lista:
+            # Si hubo varias, sumamos duración y usamos el tipo de la más larga.
+            principal = max(lista, key=lambda a: a.get("duration", 0))
+            fila["actividad_tipo"] = (principal.get("activityType") or {}).get("typeKey")
+            fila["actividad_duracion_min"] = round(
+                sum(a.get("duration", 0) for a in lista) / 60, 1
+            )
+    except Exception as e:
+        print(f"[aviso] No se pudo obtener actividad del día: {e}")
+
+    # --- Minutos de intensidad de la semana (acumulado moderado/vigoroso) ---
+    try:
+        inicio_semana = (
+            date.fromisoformat(fecha_str) - timedelta(days=date.fromisoformat(fecha_str).weekday())
+        ).isoformat()
+        intensidad = api.get_weekly_intensity_minutes(inicio_semana, fecha_str)
+        if intensidad:
+            ultimo = intensidad[-1] if isinstance(intensidad, list) else intensidad
+            fila["minutos_intensidad_semana"] = (
+                (ultimo.get("moderateValue") or 0) + (ultimo.get("vigorousValue") or 0) * 2
+            )
+    except Exception as e:
+        print(f"[aviso] No se pudieron obtener minutos de intensidad: {e}")
+
+    # --- Training Readiness (qué tan lista está tu cuerpo hoy, 0-100) ---
+    try:
+        readiness = api.get_training_readiness(fecha_str)
+        if readiness and isinstance(readiness, list) and len(readiness) > 0:
+            fila["training_readiness"] = readiness[0].get("score")
+    except Exception as e:
+        print(f"[aviso] No se pudo obtener Training Readiness: {e}")
+
+    # --- HRV (Variabilidad de Frecuencia Cardiaca) ---
+    try:
+        hrv = api.get_hrv_data(fecha_str)
+        if hrv:
+            resumen = hrv.get("hrvSummary", {})
+            fila["hrv_promedio_ms"] = resumen.get("lastNightAvg")
+            fila["hrv_estado"] = resumen.get("status")
+    except Exception as e:
+        print(f"[aviso] No se pudo obtener HRV: {e}")
+
+    # --- Frecuencia respiratoria promedio ---
+    try:
+        respiracion = api.get_respiration_data(fecha_str)
+        fila["respiracion_promedio"] = respiracion.get("avgSleepRespirationValue") or respiracion.get(
+            "avgWakingRespirationValue"
+        )
+    except Exception as e:
+        print(f"[aviso] No se pudo obtener frecuencia respiratoria: {e}")
+
+    # --- VO2 Max (capacidad aeróbica -- cambia lento, se revisa más bien semanal/mensual) ---
+    try:
+        max_metrics = api.get_max_metrics(fecha_str)
+        if max_metrics and isinstance(max_metrics, list) and len(max_metrics) > 0:
+            generico = max_metrics[0].get("generic", {})
+            fila["vo2_max"] = generico.get("vo2MaxPreciseValue") or generico.get("vo2MaxValue")
+    except Exception as e:
+        print(f"[aviso] No se pudo obtener VO2 max: {e}")
 
     return fila
 
