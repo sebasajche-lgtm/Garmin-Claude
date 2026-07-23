@@ -135,26 +135,25 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
 
     # --- Actividad registrada del día (ej. caminata, ciclismo) ---
     try:
-        actividades = api.get_activities_fordate(fecha_str)
-        lista = (actividades or {}).get("ActivitiesForDay", {}).get("payload", [])
-        if lista:
-            # Si hubo varias, sumamos duración y usamos el tipo de la más larga.
-            principal = max(lista, key=lambda a: a.get("duration", 0))
+        actividades = api.get_activities_by_date(fecha_str, fecha_str)
+        if actividades:
+            # Si hubo varias, usamos la de mayor duración como "principal".
+            principal = max(actividades, key=lambda a: a.get("duration", 0))
             fila["actividad_tipo"] = (principal.get("activityType") or {}).get("typeKey")
             fila["actividad_duracion_min"] = round(
-                sum(a.get("duration", 0) for a in lista) / 60, 1
+                sum(a.get("duration", 0) for a in actividades) / 60, 1
             )
 
             distancia_m = principal.get("distance")
+            duracion_seg = principal.get("duration")
             if distancia_m:
-                fila["actividad_distancia_km"] = round(distancia_m / 1000, 2)
-
-            velocidad_media = principal.get("averageSpeed")  # metros/segundo
-            if velocidad_media and velocidad_media > 0:
-                # Convertimos velocidad (m/s) a ritmo (minutos por kilómetro),
-                # que es como normalmente se habla de ritmo en carrera.
-                seg_por_km = 1000 / velocidad_media
-                fila["actividad_ritmo_min_km"] = f"{int(seg_por_km // 60)}:{int(seg_por_km % 60):02d}"
+                distancia_km = distancia_m / 1000
+                fila["actividad_distancia_km"] = round(distancia_km, 2)
+                # Ritmo calculado directamente de distancia/duración (más simple
+                # y confiable que depender de un campo de velocidad aparte).
+                if duracion_seg and distancia_km > 0:
+                    seg_por_km = duracion_seg / distancia_km
+                    fila["actividad_ritmo_min_km"] = f"{int(seg_por_km // 60)}:{int(seg_por_km % 60):02d}"
 
             fila["actividad_fc_promedio"] = principal.get("averageHR")
             fila["actividad_fc_maxima"] = principal.get("maxHR")
