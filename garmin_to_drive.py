@@ -21,7 +21,7 @@ import io
 import csv
 import json
 import sys
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 
 from garminconnect import Garmin
 
@@ -44,6 +44,8 @@ CSV_COLUMNS = [
     "fc_promedio",
     "fc_maxima",
     "sueno_horas",
+    "sueno_hora_inicio",
+    "sueno_hora_fin",
     "sueno_profundo_min",
     "sueno_ligero_min",
     "sueno_rem_min",
@@ -82,6 +84,22 @@ def obtener_datos_garmin(fecha_str: str) -> dict:
         dto = sueno.get("dailySleepDTO", {}) if sueno else {}
         segundos_totales = dto.get("sleepTimeSeconds")
         fila["sueno_horas"] = round(segundos_totales / 3600, 2) if segundos_totales else None
+
+        # Garmin entrega "sleepStartTimestampLocal"/"sleepEndTimestampLocal" en
+        # milisegundos, ya ajustados a tu hora local (aunque el formato es epoch
+        # UTC, representa la hora local del reloj -- por eso los formateamos
+        # como si fueran UTC, sin volver a convertir zona horaria).
+        inicio_ms = dto.get("sleepStartTimestampLocal")
+        fin_ms = dto.get("sleepEndTimestampLocal")
+        if inicio_ms:
+            fila["sueno_hora_inicio"] = datetime.fromtimestamp(
+                inicio_ms / 1000, tz=timezone.utc
+            ).strftime("%H:%M")
+        if fin_ms:
+            fila["sueno_hora_fin"] = datetime.fromtimestamp(
+                fin_ms / 1000, tz=timezone.utc
+            ).strftime("%H:%M")
+
         fila["sueno_profundo_min"] = round((dto.get("deepSleepSeconds") or 0) / 60, 1)
         fila["sueno_ligero_min"] = round((dto.get("lightSleepSeconds") or 0) / 60, 1)
         fila["sueno_rem_min"] = round((dto.get("remSleepSeconds") or 0) / 60, 1)
