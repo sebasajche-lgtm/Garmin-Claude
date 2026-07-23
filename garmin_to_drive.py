@@ -21,6 +21,7 @@ import io
 import csv
 import json
 import sys
+import time
 from datetime import date, timedelta, datetime, timezone
 
 from garminconnect import Garmin
@@ -65,14 +66,8 @@ CSV_COLUMNS = [
 ]
 
 
-def obtener_datos_garmin(fecha_str: str) -> dict:
-    """Se conecta a Garmin Connect y arma un diccionario con los datos del día."""
-    email = os.environ["GARMIN_EMAIL"]
-    password = os.environ["GARMIN_PASSWORD"]
-
-    api = Garmin(email, password)
-    api.login()
-
+def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
+    """Arma un diccionario con los datos del día, usando una sesión ya autenticada."""
     fila = {"fecha": fecha_str}
 
     # --- Resumen diario: pasos, calorías, FC ---
@@ -245,10 +240,34 @@ def subir_csv(service, folder_id: str, file_id: str, filas: list):
 
 
 def main():
-    fecha_str = sys.argv[1] if len(sys.argv) > 1 else date.today().isoformat()
+    # Uso normal (diario):        python garmin_to_drive.py
+    # Uso normal (día puntual):   python garmin_to_drive.py 2026-07-20
+    # Backfill (rango de fechas): python garmin_to_drive.py 2026-07-01 2026-07-23
+    if len(sys.argv) >= 3:
+        fecha_inicio = date.fromisoformat(sys.argv[1])
+        fecha_fin = date.fromisoformat(sys.argv[2])
+    elif len(sys.argv) == 2:
+        fecha_inicio = fecha_fin = date.fromisoformat(sys.argv[1])
+    else:
+        fecha_inicio = fecha_fin = date.today()
 
-    print(f"Obteniendo datos de Garmin para {fecha_str}...")
-    fila_nueva = obtener_datos_garmin(fecha_str)
+    print("Iniciando sesión en Garmin Connect...")
+    email = os.environ["GARMIN_EMAIL"]
+    password = os.environ["GARMIN_PASSWORD"]
+    api = Garmin(email, password)
+    api.login()
+
+    filas_nuevas = []
+    dia_actual = fecha_inicio
+    while dia_actual <= fecha_fin:
+        fecha_str = dia_actual.isoformat()
+        print(f"Obteniendo datos de Garmin para {fecha_str}...")
+        filas_nuevas.append(obtener_datos_garmin(api, fecha_str))
+        dia_actual += timedelta(days=1)
+        if dia_actual <= fecha_fin:
+            # Pausa entre días para no disparar el límite de Garmin por
+            # demasiadas solicitudes seguidas (rate limit).
+            time.sleep(2)
 
     print("Conectando con Google Drive...")
     service = obtener_credenciales_drive()
@@ -257,15 +276,16 @@ def main():
 
     filas = descargar_csv(service, file_id) if file_id else []
 
-    # Si ya existe una fila para esa fecha, la reemplaza; si no, la agrega.
-    filas = [f for f in filas if f.get("fecha") != fecha_str]
-    filas.append(fila_nueva)
+    # Reemplaza cualquier fila existente para esas fechas y agrega las nuevas.
+    fechas_nuevas = {f["fecha"] for f in filas_nuevas}
+    filas = [f for f in filas if f.get("fecha") not in fechas_nuevas]
+    filas.extend(filas_nuevas)
     filas.sort(key=lambda f: f["fecha"])
 
     print("Actualizando historial en Drive...")
     subir_csv(service, folder_id, file_id, filas)
 
-    print(f"Listo. {CSV_FILENAME} actualizado con los datos de {fecha_str}.")
+    print(f"Listo. {CSV_FILENAME} actualizado con {len(filas_nuevas)} día(s): {fecha_inicio} a {fecha_fin}.")
 
 
 if __name__ == "__main__":
