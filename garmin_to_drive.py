@@ -271,7 +271,11 @@ def main():
     elif len(sys.argv) == 2:
         fecha_inicio = fecha_fin = date.fromisoformat(sys.argv[1])
     else:
-        fecha_inicio = fecha_fin = date.today()
+        # Sin fechas (corrida automática diaria): traemos AYER, no hoy.
+        # A las 8am, el día de hoy recién empieza -- todavía puede faltar
+        # actividad que hagas más tarde. Ayer, en cambio, ya está completo
+        # (sueño + todas las actividades del día, sin importar la hora).
+        fecha_inicio = fecha_fin = date.today() - timedelta(days=1)
 
     print("Iniciando sesión en Garmin Connect...")
     email = os.environ["GARMIN_EMAIL"]
