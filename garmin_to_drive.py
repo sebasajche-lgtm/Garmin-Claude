@@ -2,18 +2,18 @@
 garmin_to_drive.py
 -------------------
 Extrae datos diarios de Garmin Connect (sueño, frecuencia cardiaca, pasos,
-Body Battery, estrés) y actualiza un archivo CSV histórico en Google Drive.
+Body Battery, estrés, actividad, HRV, VO2 max, clima/ubicación de la
+actividad) y actualiza un archivo CSV histórico en Google Drive.
 
-Pensado para correr una vez al día de forma automática (ver el workflow de
-GitHub Actions incluido: .github/workflows/sync.yml), pero también podés
-correrlo manualmente en tu computadora para probarlo.
+Uso:
+  Diario (automático, sin fechas):     python garmin_to_drive.py
+    -> trae el DÍA ANTERIOR completo (no "hoy", que a las 8am aún está
+       incompleto si haces actividad más tarde).
+  Un día puntual:                       python garmin_to_drive.py 2026-07-20
+  Rango / backfill:                     python garmin_to_drive.py 2026-07-01 2026-07-23
 
-Variables de entorno necesarias (ver README.md para cómo obtenerlas):
-  GARMIN_EMAIL              -> el correo con el que entrás a Garmin Connect
-  GARMIN_PASSWORD           -> tu contraseña de Garmin Connect
-  GDRIVE_FOLDER_ID          -> el ID de la carpeta de Drive donde se guarda el historial
-  GOOGLE_SERVICE_ACCOUNT_JSON -> el contenido completo del archivo JSON de la
-                                  cuenta de servicio de Google (como texto)
+Variables de entorno necesarias:
+  GARMIN_EMAIL, GARMIN_PASSWORD, GDRIVE_FOLDER_ID, GOOGLE_SERVICE_ACCOUNT_JSON
 """
 
 import os
@@ -29,10 +29,6 @@ from garminconnect import Garmin
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
-
-# ---------------------------------------------------------------------------
-# Configuración
-# ---------------------------------------------------------------------------
 
 CSV_FILENAME = "garmin_historial.csv"
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
@@ -62,6 +58,9 @@ CSV_COLUMNS = [
     "actividad_fc_promedio",
     "actividad_fc_maxima",
     "actividad_desnivel_positivo_m",
+    "actividad_temperatura_c",
+    "actividad_clima",
+    "actividad_ubicacion",
     "minutos_intensidad_semana",
     "training_readiness",
     "hrv_promedio_ms",
@@ -85,6 +84,7 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
         fila["fc_maxima"] = stats.get("maxHeartRate")
     except Exception as e:
         print(f"[aviso] No se pudieron obtener estadísticas diarias: {e}")
+        stats = {}
 
     # --- Sueño ---
     try:
@@ -93,20 +93,12 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
         segundos_totales = dto.get("sleepTimeSeconds")
         fila["sueno_horas"] = round(segundos_totales / 3600, 2) if segundos_totales else None
 
-        # Garmin entrega "sleepStartTimestampLocal"/"sleepEndTimestampLocal" en
-        # milisegundos, ya ajustados a tu hora local (aunque el formato es epoch
-        # UTC, representa la hora local del reloj -- por eso los formateamos
-        # como si fueran UTC, sin volver a convertir zona horaria).
         inicio_ms = dto.get("sleepStartTimestampLocal")
         fin_ms = dto.get("sleepEndTimestampLocal")
         if inicio_ms:
-            fila["sueno_hora_inicio"] = datetime.fromtimestamp(
-                inicio_ms / 1000, tz=timezone.utc
-            ).strftime("%H:%M")
+            fila["sueno_hora_inicio"] = datetime.fromtimestamp(inicio_ms / 1000, tz=timezone.utc).strftime("%H:%M")
         if fin_ms:
-            fila["sueno_hora_fin"] = datetime.fromtimestamp(
-                fin_ms / 1000, tz=timezone.utc
-            ).strftime("%H:%M")
+            fila["sueno_hora_fin"] = datetime.fromtimestamp(fin_ms / 1000, tz=timezone.utc).strftime("%H:%M")
 
         fila["sueno_profundo_min"] = round((dto.get("deepSleepSeconds") or 0) / 60, 1)
         fila["sueno_ligero_min"] = round((dto.get("lightSleepSeconds") or 0) / 60, 1)
@@ -133,11 +125,10 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     except Exception:
         pass
 
-    # --- Actividad registrada del día (ej. caminata, ciclismo) ---
+    # --- Actividad registrada del día (tipo, distancia, ritmo, FC, desnivel, clima) ---
     try:
         actividades = api.get_activities_by_date(fecha_str, fecha_str)
         if actividades:
-            # Si hubo varias, usamos la de mayor duración como "principal".
             principal = max(actividades, key=lambda a: a.get("duration", 0))
             fila["actividad_tipo"] = (principal.get("activityType") or {}).get("typeKey")
             fila["actividad_duracion_min"] = round(
@@ -149,8 +140,6 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
             if distancia_m:
                 distancia_km = distancia_m / 1000
                 fila["actividad_distancia_km"] = round(distancia_km, 2)
-                # Ritmo calculado directamente de distancia/duración (más simple
-                # y confiable que depender de un campo de velocidad aparte).
                 if duracion_seg and distancia_km > 0:
                     seg_por_km = duracion_seg / distancia_km
                     fila["actividad_ritmo_min_km"] = f"{int(seg_por_km // 60)}:{int(seg_por_km % 60):02d}"
@@ -161,10 +150,31 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
             desnivel = principal.get("elevationGain")
             if desnivel is not None:
                 fila["actividad_desnivel_positivo_m"] = round(desnivel, 0)
+
+            # Ubicación de inicio (lat/lon en texto simple)
+            lat = principal.get("startLatitude")
+            lon = principal.get("startLongitude")
+            if lat and lon:
+                fila["actividad_ubicacion"] = f"{lat:.4f},{lon:.4f}"
+
+            # Clima de la actividad (requiere el ID interno de la actividad)
+            activity_id = principal.get("activityId")
+            if activity_id:
+                try:
+                    clima = api.get_activity_weather(activity_id)
+                    if clima:
+                        temp = clima.get("temp")
+                        if temp is not None:
+                            fila["actividad_temperatura_c"] = round(temp, 1)
+                        condicion = (clima.get("weatherTypeDTO") or {}).get("desc")
+                        if condicion:
+                            fila["actividad_clima"] = condicion
+                except Exception as e:
+                    print(f"[aviso] No se pudo obtener clima de la actividad: {e}")
     except Exception as e:
         print(f"[aviso] No se pudo obtener actividad del día: {e}")
 
-    # --- Minutos de intensidad de la semana (acumulado moderado/vigoroso) ---
+    # --- Minutos de intensidad de la semana ---
     try:
         inicio_semana = (
             date.fromisoformat(fecha_str) - timedelta(days=date.fromisoformat(fecha_str).weekday())
@@ -178,7 +188,7 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     except Exception as e:
         print(f"[aviso] No se pudieron obtener minutos de intensidad: {e}")
 
-    # --- Training Readiness (qué tan lista está tu cuerpo hoy, 0-100) ---
+    # --- Training Readiness ---
     try:
         readiness = api.get_training_readiness(fecha_str)
         if readiness and isinstance(readiness, list) and len(readiness) > 0:
@@ -186,7 +196,7 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     except Exception as e:
         print(f"[aviso] No se pudo obtener Training Readiness: {e}")
 
-    # --- HRV (Variabilidad de Frecuencia Cardiaca) ---
+    # --- HRV ---
     try:
         hrv = api.get_hrv_data(fecha_str)
         if hrv:
@@ -205,7 +215,7 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     except Exception as e:
         print(f"[aviso] No se pudo obtener frecuencia respiratoria: {e}")
 
-    # --- VO2 Max (capacidad aeróbica -- cambia lento, se revisa más bien semanal/mensual) ---
+    # --- VO2 Max ---
     try:
         max_metrics = api.get_max_metrics(fecha_str)
         if max_metrics and isinstance(max_metrics, list) and len(max_metrics) > 0:
@@ -231,7 +241,6 @@ def buscar_archivo_en_drive(service, folder_id: str, nombre: str):
 
 
 def descargar_csv(service, file_id: str) -> list:
-    """Descarga el CSV existente y lo devuelve como lista de diccionarios."""
     request = service.files().get_media(fileId=file_id)
     buffer = io.BytesIO()
     downloader = MediaIoBaseDownload(buffer, request)
@@ -262,19 +271,14 @@ def subir_csv(service, folder_id: str, file_id: str, filas: list):
 
 
 def main():
-    # Uso normal (diario):        python garmin_to_drive.py
-    # Uso normal (día puntual):   python garmin_to_drive.py 2026-07-20
-    # Backfill (rango de fechas): python garmin_to_drive.py 2026-07-01 2026-07-23
     if len(sys.argv) >= 3:
         fecha_inicio = date.fromisoformat(sys.argv[1])
         fecha_fin = date.fromisoformat(sys.argv[2])
     elif len(sys.argv) == 2:
         fecha_inicio = fecha_fin = date.fromisoformat(sys.argv[1])
     else:
-        # Sin fechas (corrida automática diaria): traemos AYER, no hoy.
-        # A las 8am, el día de hoy recién empieza -- todavía puede faltar
-        # actividad que hagas más tarde. Ayer, en cambio, ya está completo
-        # (sueño + todas las actividades del día, sin importar la hora).
+        # Sin fechas (corrida automática diaria): traemos AYER, no hoy,
+        # para que el día ya esté completo (sueño + todas las actividades).
         fecha_inicio = fecha_fin = date.today() - timedelta(days=1)
 
     print("Iniciando sesión en Garmin Connect...")
@@ -291,8 +295,6 @@ def main():
         filas_nuevas.append(obtener_datos_garmin(api, fecha_str))
         dia_actual += timedelta(days=1)
         if dia_actual <= fecha_fin:
-            # Pausa entre días para no disparar el límite de Garmin por
-            # demasiadas solicitudes seguidas (rate limit).
             time.sleep(2)
 
     print("Conectando con Google Drive...")
@@ -302,7 +304,6 @@ def main():
 
     filas = descargar_csv(service, file_id) if file_id else []
 
-    # Reemplaza cualquier fila existente para esas fechas y agrega las nuevas.
     fechas_nuevas = {f["fecha"] for f in filas_nuevas}
     filas = [f for f in filas if f.get("fecha") not in fechas_nuevas]
     filas.extend(filas_nuevas)
