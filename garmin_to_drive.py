@@ -2,13 +2,17 @@
 garmin_to_drive.py
 -------------------
 Extrae datos diarios de Garmin Connect (sueño, frecuencia cardiaca, pasos,
-Body Battery, estrés, actividad, HRV, VO2 max, clima/ubicación de la
+Body Battery, estrés, actividad, HRV, VO2 max, clima/altitud/humedad de la
 actividad) y actualiza un archivo CSV histórico en Google Drive.
+
+Este script es GENÉRICO: no está atado a ninguna carrera específica.
+Los datos que recolecta sirven para comparar contra cualquier carrera futura
+-- la comparación/ponderación contra un evento puntual se hace por fuera,
+al momento de pedir el análisis, no aquí.
 
 Uso:
   Diario (automático, sin fechas):     python garmin_to_drive.py
-    -> trae el DÍA ANTERIOR completo (no "hoy", que a las 8am aún está
-       incompleto si haces actividad más tarde).
+    -> trae el DÍA ANTERIOR completo.
   Un día puntual:                       python garmin_to_drive.py 2026-07-20
   Rango / backfill:                     python garmin_to_drive.py 2026-07-01 2026-07-23
 
@@ -58,7 +62,10 @@ CSV_COLUMNS = [
     "actividad_fc_promedio",
     "actividad_fc_maxima",
     "actividad_desnivel_positivo_m",
+    "actividad_altitud_min_msnm",
+    "actividad_altitud_max_msnm",
     "actividad_temperatura_c",
+    "actividad_humedad_pct",
     "actividad_clima",
     "actividad_ubicacion",
     "minutos_intensidad_semana",
@@ -125,7 +132,8 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     except Exception:
         pass
 
-    # --- Actividad registrada del día (tipo, distancia, ritmo, FC, desnivel, clima) ---
+    # --- Actividad registrada del día (tipo, distancia, ritmo, FC, desnivel,
+    #     altitud absoluta, clima, humedad) ---
     try:
         actividades = api.get_activities_by_date(fecha_str, fecha_str)
         if actividades:
@@ -151,6 +159,16 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
             if desnivel is not None:
                 fila["actividad_desnivel_positivo_m"] = round(desnivel, 0)
 
+            # Altitud absoluta del recorrido (msnm) -- distinto del desnivel
+            # acumulado: esto es "a qué altura sobre el mar estuviste", útil
+            # para comparar contra la altitud de una carrera futura.
+            alt_min = principal.get("minElevation")
+            alt_max = principal.get("maxElevation")
+            if alt_min is not None:
+                fila["actividad_altitud_min_msnm"] = round(alt_min, 0)
+            if alt_max is not None:
+                fila["actividad_altitud_max_msnm"] = round(alt_max, 0)
+
             # Ubicación de inicio (lat/lon en texto simple)
             lat = principal.get("startLatitude")
             lon = principal.get("startLongitude")
@@ -163,9 +181,14 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
                 try:
                     clima = api.get_activity_weather(activity_id)
                     if clima:
-                        temp = clima.get("temp")
-                        if temp is not None:
-                            fila["actividad_temperatura_c"] = round(temp, 1)
+                        temp_f = clima.get("temp")
+                        if temp_f is not None:
+                            # OJO: Garmin devuelve este campo en FAHRENHEIT.
+                            temp_c = (temp_f - 32) * 5 / 9
+                            fila["actividad_temperatura_c"] = round(temp_c, 1)
+                        humedad = clima.get("relativeHumidity")
+                        if humedad is not None:
+                            fila["actividad_humedad_pct"] = round(humedad, 0)
                         condicion = (clima.get("weatherTypeDTO") or {}).get("desc")
                         if condicion:
                             fila["actividad_clima"] = condicion
@@ -277,8 +300,6 @@ def main():
     elif len(sys.argv) == 2:
         fecha_inicio = fecha_fin = date.fromisoformat(sys.argv[1])
     else:
-        # Sin fechas (corrida automática diaria): traemos AYER, no hoy,
-        # para que el día ya esté completo (sueño + todas las actividades).
         fecha_inicio = fecha_fin = date.today() - timedelta(days=1)
 
     print("Iniciando sesión en Garmin Connect...")
