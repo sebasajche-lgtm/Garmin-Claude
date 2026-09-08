@@ -2,22 +2,17 @@
 garmin_to_drive.py
 -------------------
 Extrae datos diarios de Garmin Connect (sueño, frecuencia cardiaca, pasos,
-Body Battery, estrés, actividad, HRV, VO2 max, clima/altitud/humedad de la
-actividad) y actualiza un archivo CSV histórico en Google Drive.
+Body Battery, estrés, actividad, HRV, VO2 max, clima/altitud/humedad/FC de
+recuperación) y actualiza un archivo CSV histórico en Google Drive.
 
 Este script es GENÉRICO: no está atado a ninguna carrera específica.
-Los datos que recolecta sirven para comparar contra cualquier carrera futura
--- la comparación/ponderación contra un evento puntual se hace por fuera,
+La comparación/ponderación contra un evento puntual se hace por fuera,
 al momento de pedir el análisis, no aquí.
 
 Uso:
   Diario (automático, sin fechas):     python garmin_to_drive.py
-    -> trae el DÍA ANTERIOR completo.
   Un día puntual:                       python garmin_to_drive.py 2026-07-20
   Rango / backfill:                     python garmin_to_drive.py 2026-07-01 2026-07-23
-
-Variables de entorno necesarias:
-  GARMIN_EMAIL, GARMIN_PASSWORD, GDRIVE_FOLDER_ID, GOOGLE_SERVICE_ACCOUNT_JSON
 """
 
 import os
@@ -61,6 +56,7 @@ CSV_COLUMNS = [
     "actividad_ritmo_min_km",
     "actividad_fc_promedio",
     "actividad_fc_maxima",
+    "actividad_fc_recuperacion_2min",
     "actividad_desnivel_positivo_m",
     "actividad_altitud_min_msnm",
     "actividad_altitud_max_msnm",
@@ -81,7 +77,6 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     """Arma un diccionario con los datos del día, usando una sesión ya autenticada."""
     fila = {"fecha": fecha_str}
 
-    # --- Resumen diario: pasos, calorías, FC ---
     try:
         stats = api.get_stats(fecha_str)
         fila["pasos"] = stats.get("totalSteps")
@@ -93,7 +88,6 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
         print(f"[aviso] No se pudieron obtener estadísticas diarias: {e}")
         stats = {}
 
-    # --- Sueño ---
     try:
         sueno = api.get_sleep_data(fecha_str)
         dto = sueno.get("dailySleepDTO", {}) if sueno else {}
@@ -115,7 +109,6 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     except Exception as e:
         print(f"[aviso] No se pudieron obtener datos de sueño: {e}")
 
-    # --- Body Battery ---
     try:
         bb = api.get_body_battery(fecha_str)
         if bb and isinstance(bb, list) and len(bb) > 0:
@@ -126,14 +119,12 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     except Exception as e:
         print(f"[aviso] No se pudo obtener Body Battery: {e}")
 
-    # --- Estrés ---
     try:
         fila["estres_promedio"] = stats.get("averageStressLevel")
     except Exception:
         pass
 
-    # --- Actividad registrada del día (tipo, distancia, ritmo, FC, desnivel,
-    #     altitud absoluta, clima, humedad) ---
+    # --- Actividad registrada del día ---
     try:
         actividades = api.get_activities_by_date(fecha_str, fecha_str)
         if actividades:
@@ -155,13 +146,21 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
             fila["actividad_fc_promedio"] = principal.get("averageHR")
             fila["actividad_fc_maxima"] = principal.get("maxHR")
 
+            # FC de recuperación a 2 min (si tu reloj la mide y la activaste
+            # en la configuración post-actividad). El nombre exacto del campo
+            # puede variar según el modelo -- probamos los más comunes.
+            recuperacion = (
+                principal.get("recoveryHeartRate")
+                or principal.get("recoveryHr")
+                or principal.get("hrRecovery")
+            )
+            if recuperacion is not None:
+                fila["actividad_fc_recuperacion_2min"] = recuperacion
+
             desnivel = principal.get("elevationGain")
             if desnivel is not None:
                 fila["actividad_desnivel_positivo_m"] = round(desnivel, 0)
 
-            # Altitud absoluta del recorrido (msnm) -- distinto del desnivel
-            # acumulado: esto es "a qué altura sobre el mar estuviste", útil
-            # para comparar contra la altitud de una carrera futura.
             alt_min = principal.get("minElevation")
             alt_max = principal.get("maxElevation")
             if alt_min is not None:
@@ -169,13 +168,11 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
             if alt_max is not None:
                 fila["actividad_altitud_max_msnm"] = round(alt_max, 0)
 
-            # Ubicación de inicio (lat/lon en texto simple)
             lat = principal.get("startLatitude")
             lon = principal.get("startLongitude")
             if lat and lon:
                 fila["actividad_ubicacion"] = f"{lat:.4f},{lon:.4f}"
 
-            # Clima de la actividad (requiere el ID interno de la actividad)
             activity_id = principal.get("activityId")
             if activity_id:
                 try:
@@ -183,7 +180,6 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
                     if clima:
                         temp_f = clima.get("temp")
                         if temp_f is not None:
-                            # OJO: Garmin devuelve este campo en FAHRENHEIT.
                             temp_c = (temp_f - 32) * 5 / 9
                             fila["actividad_temperatura_c"] = round(temp_c, 1)
                         humedad = clima.get("relativeHumidity")
@@ -197,7 +193,6 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     except Exception as e:
         print(f"[aviso] No se pudo obtener actividad del día: {e}")
 
-    # --- Minutos de intensidad de la semana ---
     try:
         inicio_semana = (
             date.fromisoformat(fecha_str) - timedelta(days=date.fromisoformat(fecha_str).weekday())
@@ -211,7 +206,6 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     except Exception as e:
         print(f"[aviso] No se pudieron obtener minutos de intensidad: {e}")
 
-    # --- Training Readiness ---
     try:
         readiness = api.get_training_readiness(fecha_str)
         if readiness and isinstance(readiness, list) and len(readiness) > 0:
@@ -219,7 +213,6 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     except Exception as e:
         print(f"[aviso] No se pudo obtener Training Readiness: {e}")
 
-    # --- HRV ---
     try:
         hrv = api.get_hrv_data(fecha_str)
         if hrv:
@@ -229,7 +222,6 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     except Exception as e:
         print(f"[aviso] No se pudo obtener HRV: {e}")
 
-    # --- Frecuencia respiratoria promedio ---
     try:
         respiracion = api.get_respiration_data(fecha_str)
         fila["respiracion_promedio"] = respiracion.get("avgSleepRespirationValue") or respiracion.get(
@@ -238,7 +230,6 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
     except Exception as e:
         print(f"[aviso] No se pudo obtener frecuencia respiratoria: {e}")
 
-    # --- VO2 Max ---
     try:
         max_metrics = api.get_max_metrics(fecha_str)
         if max_metrics and isinstance(max_metrics, list) and len(max_metrics) > 0:
