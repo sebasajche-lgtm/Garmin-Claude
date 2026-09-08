@@ -129,6 +129,7 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
         actividades = api.get_activities_by_date(fecha_str, fecha_str)
         if actividades:
             principal = max(actividades, key=lambda a: a.get("duration", 0))
+            activity_id = principal.get("activityId")
             fila["actividad_tipo"] = (principal.get("activityType") or {}).get("typeKey")
             fila["actividad_duracion_min"] = round(
                 sum(a.get("duration", 0) for a in actividades) / 60, 1
@@ -146,16 +147,17 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
             fila["actividad_fc_promedio"] = principal.get("averageHR")
             fila["actividad_fc_maxima"] = principal.get("maxHR")
 
-            # FC de recuperación a 2 min (si tu reloj la mide y la activaste
-            # en la configuración post-actividad). El nombre exacto del campo
-            # puede variar según el modelo -- probamos los más comunes.
-            recuperacion = (
-                principal.get("recoveryHeartRate")
-                or principal.get("recoveryHr")
-                or principal.get("hrRecovery")
-            )
-            if recuperacion is not None:
-                fila["actividad_fc_recuperacion_2min"] = recuperacion
+            # FC de recuperación a 2 min. Este dato NO viene en el resumen
+            # liviano de actividades -- hay que pedir el detalle completo
+            # de la actividad puntual (una consulta extra a Garmin).
+            if activity_id:
+                try:
+                    detalle_actividad = api.get_activity(activity_id)
+                    recuperacion = (detalle_actividad.get("summaryDTO") or {}).get("recoveryHeartRate")
+                    if recuperacion is not None:
+                        fila["actividad_fc_recuperacion_2min"] = recuperacion
+                except Exception as e:
+                    print(f"[aviso] No se pudo obtener FC de recuperación: {e}")
 
             desnivel = principal.get("elevationGain")
             if desnivel is not None:
@@ -173,7 +175,6 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
             if lat and lon:
                 fila["actividad_ubicacion"] = f"{lat:.4f},{lon:.4f}"
 
-            activity_id = principal.get("activityId")
             if activity_id:
                 try:
                     clima = api.get_activity_weather(activity_id)
