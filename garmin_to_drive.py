@@ -57,6 +57,7 @@ CSV_COLUMNS = [
     "actividad_fc_promedio",
     "actividad_fc_maxima",
     "actividad_fc_recuperacion_2min",
+    "actividad_min_zona_alta",
     "actividad_desnivel_positivo_m",
     "actividad_altitud_min_msnm",
     "actividad_altitud_max_msnm",
@@ -158,6 +159,20 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
                         fila["actividad_fc_recuperacion_2min"] = recuperacion
                 except Exception as e:
                     print(f"[aviso] No se pudo obtener FC de recuperación: {e}")
+
+                try:
+                    # Tiempo (minutos) en zonas altas de FC (4-5), para distinguir
+                    # esfuerzo sostenido real de picos puntuales/ruido de sensor.
+                    zonas = api.get_activity_hr_in_timezones(activity_id)
+                    if zonas:
+                        segundos_altas = sum(
+                            (z.get("secsInZone") or 0)
+                            for z in zonas
+                            if (z.get("zoneNumber") or 0) >= 4
+                        )
+                        fila["actividad_min_zona_alta"] = round(segundos_altas / 60, 1)
+                except Exception as e:
+                    print(f"[aviso] No se pudo obtener tiempo en zonas de FC: {e}")
 
             desnivel = principal.get("elevationGain")
             if desnivel is not None:
