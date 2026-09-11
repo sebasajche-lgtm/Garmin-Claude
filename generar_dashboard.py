@@ -36,7 +36,7 @@ def cargar_historial(ruta):
 
 
 def resumen_mensual(rows):
-    meses = defaultdict(lambda: {"hrv": [], "fc": [], "sueno": []})
+    meses = defaultdict(lambda: {"hrv": [], "fc": [], "sueno": [], "vo2max": [], "spo2": []})
     for r in rows:
         mes = r["fecha"][:7]
         if f(r.get("hrv_promedio_ms")) is not None:
@@ -45,6 +45,10 @@ def resumen_mensual(rows):
             meses[mes]["fc"].append(f(r["fc_reposo"]))
         if f(r.get("sueno_horas")) is not None:
             meses[mes]["sueno"].append(f(r["sueno_horas"]))
+        if f(r.get("vo2_max")) is not None:
+            meses[mes]["vo2max"].append(f(r["vo2_max"]))
+        if f(r.get("spo2_promedio_nocturno")) is not None:
+            meses[mes]["spo2"].append(f(r["spo2_promedio_nocturno"]))
     salida = []
     for mes in sorted(meses):
         d = meses[mes]
@@ -56,6 +60,9 @@ def resumen_mensual(rows):
             "n_fc": len(d["fc"]),
             "sueno": round(st.mean(d["sueno"]), 2) if d["sueno"] else None,
             "n_sueno": len(d["sueno"]),
+            "vo2max": round(st.mean(d["vo2max"]), 1) if d["vo2max"] else None,
+            "spo2": round(st.mean(d["spo2"]), 1) if d["spo2"] else None,
+            "n_spo2": len(d["spo2"]),
         })
     return salida
 
