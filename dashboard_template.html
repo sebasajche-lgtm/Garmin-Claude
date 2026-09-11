@@ -127,6 +127,18 @@
   </section>
 
   <section>
+    <h2>SpO2 nocturno — oxígeno en sangre mientras dormís</h2>
+    <p class="subtext">Relevante por vivir/entrenar en altura. Rango normal habitual: 95-100%. Caídas sostenidas pueden señalar estrés respiratorio nocturno, mala calidad de sueño, o necesidad de más aclimatación.</p>
+    <div class="card chart-card"><canvas id="chartSpo2" height="180"></canvas></div>
+  </section>
+
+  <section>
+    <h2>VO2 max — tendencia</h2>
+    <p class="subtext">Estimado por Garmin. Sube = mejor capacidad aeróbica máxima; cambia lento (semanas/meses), no esperes saltos de un día para otro.</p>
+    <div class="card chart-card"><canvas id="chartVo2" height="180"></canvas></div>
+  </section>
+
+  <section>
     <h2>Eficiencia aeróbica — velocidad por latido</h2>
     <p class="subtext">Solo sesiones relativamente planas (comparables). Sube = mejor condición a igual esfuerzo cardiaco.</p>
     <div class="card chart-card"><canvas id="chartEficiencia" height="180"></canvas></div>
@@ -273,6 +285,20 @@ function construirAltitud(datos) { return {
   options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor,callback:v=>v+'%'},grid:{color:gridColor},suggestedMax:100} } }
 };}
 
+function construirSpo2(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'SpO2 (%)', data: datos.map(m=>m.spo2), borderColor:'#5a9aa0', backgroundColor:'rgba(90,154,160,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
+  options:{ plugins:{legend:{display:false},
+      tooltip:{ callbacks:{ afterLabel: (ctx) => `(${datos[ctx.dataIndex].n_spo2} noches con dato)` }}},
+    scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMin:88,suggestedMax:100} } }
+};}
+
+function construirVo2(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'VO2 max', data: datos.map(m=>m.vo2max), borderColor:'#d2a24c', backgroundColor:'rgba(210,162,76,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}} } }
+};}
+
 function construirEficiencia(datos) { return {
   type:'line',
   data:{ labels: datos.map(e=>nombreMes(e.mes)), datasets:[{label:'Eficiencia', data: datos.map(e=>e.ef), borderColor:'#7ba17e', backgroundColor:'rgba(123,161,126,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
@@ -288,6 +314,8 @@ function construirCumplimiento(datos) { return {
 const DEFINICIONES = [
   { id:'chartHrv', datos: DATOS.mensual, granularidad:'mes', construir: construirHrv },
   { id:'chartSleep', datos: DATOS.mensual, granularidad:'mes', construir: construirSleep },
+  { id:'chartSpo2', datos: DATOS.mensual, granularidad:'mes', construir: construirSpo2 },
+  { id:'chartVo2', datos: DATOS.mensual, granularidad:'mes', construir: construirVo2 },
   { id:'chartPMC', datos: DATOS.pmc, granularidad:'dia', construir: construirPMC },
   { id:'chartCarga', datos: DATOS.carga_semanal, granularidad:'semana', construir: construirCarga },
   { id:'chartAltitud', datos: DATOS.altitud, granularidad:'mes', construir: construirAltitud },
