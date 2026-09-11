@@ -133,6 +133,27 @@
   </section>
 
   <section>
+    <h2>Body Battery y estrés</h2>
+    <p class="subtext">Body Battery mínimo: qué tan "vacío" terminás el día (más alto = mejor margen). Estrés: promedio diario de Garmin (más bajo = mejor).</p>
+    <div class="grid2">
+      <div class="card chart-card"><h3>Body Battery mínimo diario</h3><canvas id="chartBB" height="200"></canvas></div>
+      <div class="card chart-card"><h3>Estrés promedio</h3><canvas id="chartEstres" height="200"></canvas></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Puntaje de sueño (Garmin)</h2>
+    <p class="subtext">Número compuesto de Garmin (0-100) que combina duración, fases y continuidad -- más completo que solo "horas dormidas".</p>
+    <div class="card chart-card"><canvas id="chartPuntajeSueno" height="180"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Dinámica de carrera — cadencia y zancada</h2>
+    <p class="subtext">Solo en actividades de correr/trail. Cadencia ideal suele rondar 170-180 pasos/min (referencia general, no una regla estricta). Zancada más larga no siempre es mejor -- depende de que se mantenga eficiente.</p>
+    <div class="card chart-card"><canvas id="chartDinamica" height="200"></canvas></div>
+  </section>
+
+  <section>
     <h2>VO2 max — tendencia</h2>
     <p class="subtext">Estimado por Garmin. Sube = mejor capacidad aeróbica máxima; cambia lento (semanas/meses), no esperes saltos de un día para otro.</p>
     <div class="card chart-card"><canvas id="chartVo2" height="180"></canvas></div>
@@ -293,6 +314,34 @@ function construirSpo2(datos) { return {
     scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMin:88,suggestedMax:100} } }
 };}
 
+function construirBB(datos) { return {
+  type:'bar',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Body Battery mín', data: datos.map(m=>m.bb_min), backgroundColor:'#7ba17e'}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:100} } }
+};}
+
+function construirEstres(datos) { return {
+  type:'bar',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Estrés promedio', data: datos.map(m=>m.estres), backgroundColor:'#b1573f'}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:60} } }
+};}
+
+function construirPuntajeSueno(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Puntaje de sueño', data: datos.map(m=>m.puntaje_sueno), borderColor:'#d2a24c', backgroundColor:'rgba(210,162,76,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:100} } }
+};}
+
+function construirDinamica(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[
+    { label:'Cadencia (pasos/min)', data: datos.map(m=>m.cadencia), borderColor:'#5a9aa0', backgroundColor:'transparent', tension:0.3, borderWidth:2 },
+    { label:'Zancada (cm)', data: datos.map(m=>m.zancada), borderColor:'#d2a24c', backgroundColor:'transparent', tension:0.3, borderWidth:2, yAxisID:'y1' }
+  ]},
+  options:{ plugins:{legend:{labels:{color:fontColor,font:{size:11}}}},
+    scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}}, y1:{ticks:{color:fontColor},grid:{display:false},position:'right'} } }
+};}
+
 function construirVo2(datos) { return {
   type:'line',
   data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'VO2 max', data: datos.map(m=>m.vo2max), borderColor:'#d2a24c', backgroundColor:'rgba(210,162,76,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
@@ -314,6 +363,10 @@ function construirCumplimiento(datos) { return {
 const DEFINICIONES = [
   { id:'chartHrv', datos: DATOS.mensual, granularidad:'mes', construir: construirHrv },
   { id:'chartSleep', datos: DATOS.mensual, granularidad:'mes', construir: construirSleep },
+  { id:'chartBB', datos: DATOS.mensual, granularidad:'mes', construir: construirBB },
+  { id:'chartEstres', datos: DATOS.mensual, granularidad:'mes', construir: construirEstres },
+  { id:'chartPuntajeSueno', datos: DATOS.mensual, granularidad:'mes', construir: construirPuntajeSueno },
+  { id:'chartDinamica', datos: DATOS.dinamica, granularidad:'mes', construir: construirDinamica },
   { id:'chartSpo2', datos: DATOS.mensual, granularidad:'mes', construir: construirSpo2 },
   { id:'chartVo2', datos: DATOS.mensual, granularidad:'mes', construir: construirVo2 },
   { id:'chartPMC', datos: DATOS.pmc, granularidad:'dia', construir: construirPMC },
