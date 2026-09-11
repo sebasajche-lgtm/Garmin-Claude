@@ -51,12 +51,16 @@
   .legend span{display:inline-flex;align-items:center;gap:6px;}
   .dot{width:9px;height:9px;border-radius:2px;display:inline-block;}
   .empty-note{color:var(--text-dim);font-size:14px;padding:16px 18px;border:1px dashed var(--line);border-radius:8px;background:var(--panel-2);}
-  .rango-botones{display:flex;gap:8px;margin-bottom:14px;}
-  .rango-botones button{
+  .rango-global{
+    display:flex; align-items:center; gap:8px; margin-bottom:24px;
+    padding:10px 14px; background:var(--panel); border:1px solid var(--line); border-radius:8px;
+  }
+  .rango-label{ font-size:12.5px; color:var(--text-dim); margin-right:4px; }
+  .rango-global button{
     font-family:var(--sans);font-size:12.5px;color:var(--text-dim);background:var(--panel-2);
     border:1px solid var(--line);border-radius:6px;padding:5px 12px;cursor:pointer;
   }
-  .rango-botones button.activo{color:var(--sage);border-color:var(--sage);background:rgba(122,161,126,0.1);}
+  .rango-global button.activo{color:var(--sage);border-color:var(--sage);background:rgba(122,161,126,0.1);}
   footer{color:var(--text-dim);font-size:12px;margin-top:56px;border-top:1px solid var(--line);padding-top:16px;}
 </style>
 </head>
@@ -66,6 +70,14 @@
     <div><h1>Panel de entrenamiento</h1><p>Sebastián Sajche — generado automáticamente desde Garmin Connect</p></div>
     <div class="goal-tag" id="metaTag"></div>
   </header>
+
+  <div class="rango-global">
+    <span class="rango-label">Rango:</span>
+    <button data-rango="8s" class="activo">8 semanas</button>
+    <button data-rango="26s">26 semanas</button>
+    <button data-rango="52s">52 semanas</button>
+    <button data-rango="todo">Todo</button>
+  </div>
 
   <div class="hero">
     <div class="ring" id="ring">
@@ -98,7 +110,6 @@
     <h2>Carga de entreno por tipo</h2>
     <p class="subtext">Minutos totales entrenados por semana, divididos por tipo de actividad (colores abajo).</p>
     <div class="card chart-card">
-      <div class="rango-botones" data-target="carga"></div>
       <canvas id="chartCarga" height="200"></canvas>
       <div class="legend">
         <span><span class="dot" style="background:#7ba17e"></span>Correr / trail</span>
@@ -122,7 +133,6 @@
   <section>
     <h2>Cumplimiento semanal (meta: 4+ sesiones/semana)</h2>
     <div class="card chart-card">
-      <div class="rango-botones" data-target="cumplimiento"></div>
       <canvas id="chartCumplimiento" height="170"></canvas>
     </div>
   </section>
@@ -145,15 +155,13 @@ const nombreMes = (m) => nombresMeses[m.slice(5,7)] + "'" + m.slice(2,4);
 
 document.getElementById("generadoTs").textContent = DATOS.generado;
 
-// --- Hero ---
+// --- Hero (no depende del rango, siempre es "hoy") ---
 const hoy = DATOS.hoy;
-const ring = document.getElementById("ring");
-ring.classList.add(hoy.estado.toLowerCase());
+document.getElementById("ring").classList.add(hoy.estado.toLowerCase());
 document.getElementById("estadoTexto").textContent = hoy.estado;
 document.getElementById("fcRing").innerHTML = (hoy.fc_reposo ?? "—") + "<small> lpm</small>";
 document.getElementById("fechaHero").textContent = hoy.fecha;
 document.getElementById("metaTag").textContent = "Última actualización: " + hoy.fecha;
-
 const listaCriterios = document.getElementById("criteriosLista");
 hoy.criterios.forEach(c => {
   const div = document.createElement("div");
@@ -162,88 +170,7 @@ hoy.criterios.forEach(c => {
   listaCriterios.appendChild(div);
 });
 
-// --- HRV / FC ---
-new Chart(document.getElementById('chartHrv'), {
-  type:'line',
-  data:{ labels: DATOS.mensual.map(m=>nombreMes(m.mes)), datasets:[
-    { label:'HRV (ms)', data: DATOS.mensual.map(m=>m.hrv), borderColor:'#5a9aa0', backgroundColor:'transparent', tension:0.3, borderWidth:2 },
-    { label:'FC reposo (lpm)', data: DATOS.mensual.map(m=>m.fc), borderColor:'#b1573f', backgroundColor:'transparent', tension:0.3, borderWidth:2, yAxisID:'y1' }
-  ]},
-  options:{ plugins:{legend:{labels:{color:fontColor,font:{size:11}}}},
-    scales:{ x:{ticks:{color:fontColor},grid:{color:gridColor}}, y:{ticks:{color:fontColor},grid:{color:gridColor}}, y1:{ticks:{color:fontColor},grid:{display:false},position:'right'} } }
-});
-
-new Chart(document.getElementById('chartSleep'), {
-  type:'bar',
-  data:{ labels: DATOS.mensual.map(m=>nombreMes(m.mes)), datasets:[{label:'Horas de sueño', data: DATOS.mensual.map(m=>m.sueno), backgroundColor:'#d2a24c'}] },
-  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:9} } }
-});
-
-// --- PMC ---
-new Chart(document.getElementById('chartPMC'), {
-  type:'line',
-  data:{ labels: DATOS.pmc.map(p=>p.fecha.slice(5)), datasets:[
-    { label:'CTL (fondo)', data: DATOS.pmc.map(p=>p.ctl), borderColor:'#5a9aa0', backgroundColor:'transparent', borderWidth:2, pointRadius:0 },
-    { label:'ATL (fatiga)', data: DATOS.pmc.map(p=>p.atl), borderColor:'#b1573f', backgroundColor:'transparent', borderWidth:2, pointRadius:0 },
-    { label:'TSB (forma)', data: DATOS.pmc.map(p=>p.tsb), borderColor:'#d2a24c', backgroundColor:'transparent', borderWidth:2, pointRadius:0, borderDash:[4,3] }
-  ]},
-  options:{ plugins:{legend:{labels:{color:fontColor,font:{size:11}}}},
-    scales:{ x:{ticks:{color:fontColor,maxTicksLimit:12,font:{size:9}},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}} } }
-});
-
-// --- Gráficos con selector de rango (8 semanas / todo) ---
-function graficoConRango(canvasId, targetSelector, datosCompletos, construirConfig) {
-  const contenedorBotones = document.querySelector(`.rango-botones[data-target="${targetSelector}"]`);
-  const btn8 = document.createElement("button");
-  btn8.textContent = "8 semanas"; btn8.className = "activo";
-  const btnTodo = document.createElement("button");
-  btnTodo.textContent = "Todo el historial";
-  contenedorBotones.appendChild(btn8);
-  contenedorBotones.appendChild(btnTodo);
-
-  let chart = new Chart(document.getElementById(canvasId), construirConfig(datosCompletos.slice(-8)));
-
-  function activar(boton, otro, datos) {
-    boton.classList.add("activo"); otro.classList.remove("activo");
-    chart.destroy();
-    chart = new Chart(document.getElementById(canvasId), construirConfig(datos));
-  }
-  btn8.addEventListener("click", () => activar(btn8, btnTodo, datosCompletos.slice(-8)));
-  btnTodo.addEventListener("click", () => activar(btnTodo, btn8, datosCompletos));
-}
-
-graficoConRango('chartCarga', 'carga', DATOS.carga_semanal, (datos) => ({
-  type:'bar',
-  data:{ labels: datos.map(s=>s.semana.slice(5)), datasets:[
-    {label:'Correr/trail', data: datos.map(s=>s.correr), backgroundColor:'#7ba17e'},
-    {label:'Bici', data: datos.map(s=>s.bici), backgroundColor:'#5a9aa0'},
-    {label:'Fuerza', data: datos.map(s=>s.fuerza), backgroundColor:'#d2a24c'}
-  ]},
-  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor,font:{size:10.5}},grid:{display:false},stacked:true}, y:{ticks:{color:fontColor},grid:{color:gridColor},stacked:true,title:{display:true,text:'minutos',color:fontColor,font:{size:11}}} } }
-}));
-
-// --- Altitud ---
-new Chart(document.getElementById('chartAltitud'), {
-  type:'bar',
-  data:{ labels: DATOS.altitud.map(m=>nombreMes(m.mes)), datasets:[{data: DATOS.altitud.map(m=>m.pct), backgroundColor:'#5a9aa0'}] },
-  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor,callback:v=>v+'%'},grid:{color:gridColor},suggestedMax:100} } }
-});
-
-// --- Eficiencia ---
-new Chart(document.getElementById('chartEficiencia'), {
-  type:'line',
-  data:{ labels: DATOS.eficiencia.map(e=>nombreMes(e.mes)), datasets:[{label:'Eficiencia', data: DATOS.eficiencia.map(e=>e.ef), borderColor:'#7ba17e', backgroundColor:'rgba(123,161,126,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
-  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}} } }
-});
-
-// --- Cumplimiento ---
-graficoConRango('chartCumplimiento', 'cumplimiento', DATOS.cumplimiento, (datos) => ({
-  type:'bar',
-  data:{ labels: datos.map(s=>s.semana.slice(5)), datasets:[{data: datos.map(s=>s.n), backgroundColor: datos.map(s=>s.n>=4?'#7ba17e':'#2d413a')}] },
-  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor,maxRotation:90,minRotation:90,font:{size:9}},grid:{display:false}}, y:{ticks:{color:fontColor,stepSize:1},grid:{color:gridColor},suggestedMax:6} } }
-}));
-
-// --- Semaforo ---
+// --- Semáforo (no depende del rango, siempre es "la última semana") ---
 document.getElementById("notaSemaforo").textContent = DATOS.nota_semaforo || "";
 const cont = document.getElementById("semaforoContenido");
 if (DATOS.semaforo && DATOS.semaforo.length > 0) {
@@ -264,6 +191,109 @@ if (DATOS.semaforo && DATOS.semaforo.length > 0) {
   div.textContent = DATOS.nota_semaforo || "Sin datos de plan todavía.";
   cont.appendChild(div);
 }
+
+// ============================================================
+// SISTEMA DE RANGO GLOBAL -- un solo control mueve TODOS los
+// graficos temporales a la vez. Cada dataset tiene su propia
+// granularidad (dia / semana / mes), asi que "26 semanas" se
+// traduce distinto segun el grafico, pero siempre a la misma
+// ventana real de tiempo.
+// ============================================================
+const SEMANAS_POR_RANGO = { "8s": 8, "26s": 26, "52s": 52, "todo": null };
+
+function recortar(arr, rango, granularidad) {
+  const semanas = SEMANAS_POR_RANGO[rango];
+  if (semanas === null) return arr;
+  if (granularidad === "semana") return arr.slice(-semanas);
+  if (granularidad === "dia") return arr.slice(-semanas * 7);
+  if (granularidad === "mes") return arr.slice(-Math.max(1, Math.ceil(semanas / 4.345)));
+  return arr;
+}
+
+const graficos = {}; // nombre -> instancia Chart, para poder destruir/recrear
+
+function construirHrv(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[
+    { label:'HRV (ms)', data: datos.map(m=>m.hrv), borderColor:'#5a9aa0', backgroundColor:'transparent', tension:0.3, borderWidth:2 },
+    { label:'FC reposo (lpm)', data: datos.map(m=>m.fc), borderColor:'#b1573f', backgroundColor:'transparent', tension:0.3, borderWidth:2, yAxisID:'y1' }
+  ]},
+  options:{ plugins:{legend:{labels:{color:fontColor,font:{size:11}}}},
+    scales:{ x:{ticks:{color:fontColor},grid:{color:gridColor}}, y:{ticks:{color:fontColor},grid:{color:gridColor}}, y1:{ticks:{color:fontColor},grid:{display:false},position:'right'} } }
+};}
+
+function construirSleep(datos) { return {
+  type:'bar',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Horas de sueño', data: datos.map(m=>m.sueno), backgroundColor:'#d2a24c'}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:9} } }
+};}
+
+function construirPMC(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(p=>p.fecha.slice(5)), datasets:[
+    { label:'CTL (fondo)', data: datos.map(p=>p.ctl), borderColor:'#5a9aa0', backgroundColor:'transparent', borderWidth:2, pointRadius:0 },
+    { label:'ATL (fatiga)', data: datos.map(p=>p.atl), borderColor:'#b1573f', backgroundColor:'transparent', borderWidth:2, pointRadius:0 },
+    { label:'TSB (forma)', data: datos.map(p=>p.tsb), borderColor:'#d2a24c', backgroundColor:'transparent', borderWidth:2, pointRadius:0, borderDash:[4,3] }
+  ]},
+  options:{ plugins:{legend:{labels:{color:fontColor,font:{size:11}}}},
+    scales:{ x:{ticks:{color:fontColor,maxTicksLimit:12,font:{size:9}},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}} } }
+};}
+
+function construirCarga(datos) { return {
+  type:'bar',
+  data:{ labels: datos.map(s=>s.semana.slice(5)), datasets:[
+    {label:'Correr/trail', data: datos.map(s=>s.correr), backgroundColor:'#7ba17e'},
+    {label:'Bici', data: datos.map(s=>s.bici), backgroundColor:'#5a9aa0'},
+    {label:'Fuerza', data: datos.map(s=>s.fuerza), backgroundColor:'#d2a24c'}
+  ]},
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor,font:{size:10.5}},grid:{display:false},stacked:true}, y:{ticks:{color:fontColor},grid:{color:gridColor},stacked:true,title:{display:true,text:'minutos',color:fontColor,font:{size:11}}} } }
+};}
+
+function construirAltitud(datos) { return {
+  type:'bar',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{data: datos.map(m=>m.pct), backgroundColor:'#5a9aa0'}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor,callback:v=>v+'%'},grid:{color:gridColor},suggestedMax:100} } }
+};}
+
+function construirEficiencia(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(e=>nombreMes(e.mes)), datasets:[{label:'Eficiencia', data: datos.map(e=>e.ef), borderColor:'#7ba17e', backgroundColor:'rgba(123,161,126,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}} } }
+};}
+
+function construirCumplimiento(datos) { return {
+  type:'bar',
+  data:{ labels: datos.map(s=>s.semana.slice(5)), datasets:[{data: datos.map(s=>s.n), backgroundColor: datos.map(s=>s.n>=4?'#7ba17e':'#2d413a')}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor,maxRotation:90,minRotation:90,font:{size:9}},grid:{display:false}}, y:{ticks:{color:fontColor,stepSize:1},grid:{color:gridColor},suggestedMax:6} } }
+};}
+
+const DEFINICIONES = [
+  { id:'chartHrv', datos: DATOS.mensual, granularidad:'mes', construir: construirHrv },
+  { id:'chartSleep', datos: DATOS.mensual, granularidad:'mes', construir: construirSleep },
+  { id:'chartPMC', datos: DATOS.pmc, granularidad:'dia', construir: construirPMC },
+  { id:'chartCarga', datos: DATOS.carga_semanal, granularidad:'semana', construir: construirCarga },
+  { id:'chartAltitud', datos: DATOS.altitud, granularidad:'mes', construir: construirAltitud },
+  { id:'chartEficiencia', datos: DATOS.eficiencia, granularidad:'mes', construir: construirEficiencia },
+  { id:'chartCumplimiento', datos: DATOS.cumplimiento, granularidad:'semana', construir: construirCumplimiento },
+];
+
+function renderizarTodo(rango) {
+  DEFINICIONES.forEach(def => {
+    const datosRecortados = recortar(def.datos, rango, def.granularidad);
+    if (graficos[def.id]) graficos[def.id].destroy();
+    graficos[def.id] = new Chart(document.getElementById(def.id), def.construir(datosRecortados));
+  });
+}
+
+renderizarTodo('8s');
+
+document.querySelectorAll('.rango-global button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.rango-global button').forEach(b => b.classList.remove('activo'));
+    btn.classList.add('activo');
+    renderizarTodo(btn.dataset.rango);
+  });
+});
 </script>
 </body>
 </html>
