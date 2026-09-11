@@ -123,13 +123,25 @@ def exposicion_altitud_mensual(rows, umbral=2000):
 
 
 def carga_diaria_proxy(rows):
-    """Proxy de TSS: duracion_min * (FC_actividad / FC_MAX)^2 (similar al TRIMP)."""
+    """TRIMP de Banister (1991) -- la version validada cientificamente, usando
+    FC de reserva (no solo %FC max). Requiere FC en reposo del dia + FC
+    promedio de la actividad; ambos datos ya los capturamos.
+    y = 0.64 * e^(1.92 * HRr) es la constante para hombres (Banister usa 1.67
+    para mujeres). Cambiar el exponente si corresponde.
+    """
+    import math
     cargas = {}
     for r in rows:
         dur = f(r.get("actividad_duracion_min")) or 0
-        fc = f(r.get("actividad_fc_promedio"))
-        carga = dur * (fc / FC_MAX_REFERENCIA) ** 2 if fc else 0
-        cargas[r["fecha"]] = carga
+        fc_actividad = f(r.get("actividad_fc_promedio"))
+        fc_reposo = f(r.get("fc_reposo"))
+        if not dur or not fc_actividad or not fc_reposo:
+            cargas[r["fecha"]] = 0
+            continue
+        hrr = (fc_actividad - fc_reposo) / (FC_MAX_REFERENCIA - fc_reposo)
+        hrr = max(0, min(1, hrr))  # acotar a [0,1] por seguridad
+        y = 0.64 * math.exp(1.92 * hrr)
+        cargas[r["fecha"]] = dur * hrr * y
     return cargas
 
 
