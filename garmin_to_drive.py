@@ -57,6 +57,10 @@ CSV_COLUMNS = [
     "actividad_fc_promedio",
     "actividad_fc_maxima",
     "actividad_fc_recuperacion_2min",
+    "actividad_cadencia_prom",
+    "actividad_zancada_cm",
+    "actividad_tiempo_contacto_ms",
+    "actividad_oscilacion_vertical_cm",
     "actividad_min_zona_alta",
     "actividad_min_zona2",
     "actividad_deriva_fc_pct",
@@ -158,11 +162,28 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
             if activity_id:
                 try:
                     detalle_actividad = api.get_activity(activity_id)
-                    recuperacion = (detalle_actividad.get("summaryDTO") or {}).get("recoveryHeartRate")
+                    resumen = detalle_actividad.get("summaryDTO") or {}
+                    recuperacion = resumen.get("recoveryHeartRate")
                     if recuperacion is not None:
                         fila["actividad_fc_recuperacion_2min"] = recuperacion
+
+                    cadencia = resumen.get("averageRunningCadenceInStepsPerMinute") or resumen.get("avgRunCadence")
+                    if cadencia is not None:
+                        fila["actividad_cadencia_prom"] = round(cadencia, 0)
+
+                    zancada = resumen.get("avgStrideLength")
+                    if zancada is not None:
+                        fila["actividad_zancada_cm"] = round(zancada, 1)
+
+                    contacto = resumen.get("avgGroundContactTime")
+                    if contacto is not None:
+                        fila["actividad_tiempo_contacto_ms"] = round(contacto, 0)
+
+                    oscilacion = resumen.get("avgVerticalOscillation")
+                    if oscilacion is not None:
+                        fila["actividad_oscilacion_vertical_cm"] = round(oscilacion, 1)
                 except Exception as e:
-                    print(f"[aviso] No se pudo obtener FC de recuperación: {e}")
+                    print(f"[aviso] No se pudo obtener FC de recuperación / dinámica de carrera: {e}")
 
                 try:
                     # Tiempo (minutos) en zonas de FC, para distinguir esfuerzo
