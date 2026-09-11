@@ -57,14 +57,12 @@ def resumen_mensual(rows):
     return salida
 
 
-def carga_semanal_por_tipo(rows, semanas_atras=11):
-    hoy = date.fromisoformat(rows[-1]["fecha"])
-    limite = hoy - timedelta(weeks=semanas_atras)
+def carga_semanal_por_tipo(rows):
     semanas = defaultdict(lambda: {"correr": 0, "bici": 0, "fuerza": 0})
     for r in rows:
-        fecha = date.fromisoformat(r["fecha"])
-        if fecha < limite or not r.get("actividad_tipo"):
+        if not r.get("actividad_tipo"):
             continue
+        fecha = date.fromisoformat(r["fecha"])
         dur = f(r.get("actividad_duracion_min")) or 0
         tipo = r["actividad_tipo"]
         year, week, _ = fecha.isocalendar()
