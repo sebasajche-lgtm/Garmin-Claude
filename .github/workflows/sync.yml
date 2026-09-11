@@ -69,6 +69,7 @@ jobs:
         run: |
           mkdir -p _site
           cp dashboard.html _site/index.html
+          cp chart.umd.js _site/chart.umd.js
 
       - uses: actions/upload-pages-artifact@v3
         with:
