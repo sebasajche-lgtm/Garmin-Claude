@@ -60,6 +60,71 @@ def resumen_mensual(rows):
     return salida
 
 
+def promedio_en_rango(rows, dias, campo):
+    fecha_max = date.fromisoformat(rows[-1]["fecha"])
+    fecha_min = fecha_max - timedelta(days=dias - 1)
+    vals = [f(r[campo]) for r in rows if fecha_min <= date.fromisoformat(r["fecha"]) <= fecha_max and f(r.get(campo)) is not None]
+    return round(st.mean(vals), 2) if vals else None
+
+
+def analisis_periodo(rows, dias, etiqueta):
+    fecha_max = date.fromisoformat(rows[-1]["fecha"])
+    fecha_min = fecha_max - timedelta(days=dias - 1)
+    fecha_min_prev = fecha_min - timedelta(days=dias)
+    en_rango = [r for r in rows if fecha_min <= date.fromisoformat(r["fecha"]) <= fecha_max]
+    en_rango_prev = [r for r in rows if fecha_min_prev <= date.fromisoformat(r["fecha"]) < fecha_min]
+
+    def prom(filas, campo):
+        vals = [f(r[campo]) for r in filas if f(r.get(campo)) is not None]
+        return round(st.mean(vals), 1) if vals else None
+
+    hrv, hrv_prev = prom(en_rango, "hrv_promedio_ms"), prom(en_rango_prev, "hrv_promedio_ms")
+    fc, fc_prev = prom(en_rango, "fc_reposo"), prom(en_rango_prev, "fc_reposo")
+    sueno, sueno_prev = prom(en_rango, "sueno_horas"), prom(en_rango_prev, "sueno_horas")
+
+    dist = round(sum(f(r.get("actividad_distancia_km")) or 0 for r in en_rango), 1)
+    desn = round(sum(f(r.get("actividad_desnivel_positivo_m")) or 0 for r in en_rango))
+    dias_act = sum(1 for r in en_rango if r.get("actividad_tipo"))
+
+    frases = []
+
+    if hrv is not None and hrv_prev is not None:
+        cambio = round((hrv - hrv_prev) / hrv_prev * 100)
+        direccion = "mejoró" if cambio > 3 else ("empeoró" if cambio < -3 else "se mantuvo estable")
+        frases.append(f"HRV promedio {hrv} ms ({direccion}, {cambio:+d}% vs. el período previo de {dias} días).")
+    elif hrv is not None:
+        frases.append(f"HRV promedio {hrv} ms (sin período previo completo para comparar).")
+
+    if fc is not None and fc_prev is not None:
+        cambio = round((fc - fc_prev) / fc_prev * 100)
+        direccion = "mejoró" if cambio < -2 else ("empeoró" if cambio > 2 else "se mantuvo estable")
+        frases.append(f"FC en reposo promedio {fc} lpm ({direccion}, {cambio:+d}% vs. el período previo).")
+
+    if sueno is not None:
+        alerta = " -- por debajo de la meta de 7h" if sueno < 7 else ""
+        frases.append(f"Sueño promedio {sueno}h{alerta}.")
+
+    frases.append(f"{dias_act} días con actividad, {dist} km recorridos, {desn} m de desnivel acumulado.")
+
+    return {"titulo": etiqueta, "frases": frases}
+
+
+def resumen_pmc_actual(pmc):
+    if not pmc:
+        return None
+    ultimo = pmc[-1]
+    tsb = ultimo["tsb"]
+    if tsb > 5:
+        lectura = "descansado, con margen para asumir carga fuerte"
+    elif tsb > -10:
+        lectura = "en equilibrio, carga sostenible"
+    elif tsb > -30:
+        lectura = "cargado -- normal en bloques de entreno duro, vigilar los próximos días"
+    else:
+        lectura = "muy fatigado -- riesgo elevado, considerar descanso"
+    return f"TSB actual: {tsb} ({lectura})."
+
+
 def carga_semanal_por_tipo(rows):
     semanas = defaultdict(lambda: {"correr": 0, "bici": 0, "fuerza": 0})
     for r in rows:
@@ -288,6 +353,14 @@ def main():
 
     semaforo, nota_semaforo = semaforo_semana(rows, plan)
 
+    pmc = ctl_atl_tsb(rows)
+
+    analisis_4sem = analisis_periodo(rows, 28, "Últimas 4 semanas")
+    analisis_6mes = analisis_periodo(rows, 182, "Últimos 6 meses")
+    nota_pmc = resumen_pmc_actual(pmc)
+    if nota_pmc:
+        analisis_4sem["frases"].append(nota_pmc)
+
     datos = {
         "generado": datetime.now().isoformat(timespec="minutes"),
         "mensual": resumen_mensual(rows),
@@ -295,10 +368,11 @@ def main():
         "cumplimiento": cumplimiento_semanal(rows),
         "eficiencia": eficiencia_aerobica_mensual(rows),
         "altitud": exposicion_altitud_mensual(rows),
-        "pmc": ctl_atl_tsb(rows),
+        "pmc": pmc,
         "hoy": estado_del_dia(rows),
         "semaforo": semaforo,
         "nota_semaforo": nota_semaforo,
+        "analisis": [analisis_4sem, analisis_6mes],
     }
 
     html = generar_html(datos)
