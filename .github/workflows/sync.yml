@@ -16,10 +16,19 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -47,10 +56,23 @@ jobs:
       - name: Generar dashboard
         run: python generar_dashboard.py garmin_historial_local.csv plan_oct-dic_2026_sesiones.csv
 
-      - name: Publicar cambios en el dashboard
+      - name: Guardar dashboard.html en el repositorio (historial)
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add dashboard.html
           git diff --staged --quiet || git commit -m "Actualizar dashboard automaticamente"
           git push
+        continue-on-error: true
+
+      - name: Preparar carpeta a publicar
+        run: |
+          mkdir -p _site
+          cp dashboard.html _site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
