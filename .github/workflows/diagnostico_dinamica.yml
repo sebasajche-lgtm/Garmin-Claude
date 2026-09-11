@@ -1,7 +1,12 @@
 name: Diagnóstico dinámica de carrera (temporal)
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      fecha:
+        description: "Fecha a revisar (YYYY-MM-DD). Vacío = ayer."
+        required: false
+        default: ""
 
 jobs:
   diagnostico:
@@ -15,4 +20,4 @@ jobs:
       - env:
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
-        run: python diagnostico_dinamica.py
+        run: python diagnostico_dinamica.py ${{ inputs.fecha }}
