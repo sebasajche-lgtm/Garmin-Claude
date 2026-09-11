@@ -146,7 +146,7 @@ def ctl_atl_tsb(rows):
         atl += (c - atl) / 7
         serie.append({"fecha": d.isoformat(), "ctl": round(ctl, 1), "atl": round(atl, 1), "tsb": round(ctl - atl, 1)})
         d += timedelta(days=1)
-    return serie[-84:]  # ultimas 12 semanas
+    return serie
 
 
 def estado_del_dia(rows):
