@@ -51,8 +51,11 @@ def resumen_mensual(rows):
         salida.append({
             "mes": mes,
             "hrv": round(st.mean(d["hrv"]), 1) if d["hrv"] else None,
+            "n_hrv": len(d["hrv"]),
             "fc": round(st.mean(d["fc"]), 1) if d["fc"] else None,
+            "n_fc": len(d["fc"]),
             "sueno": round(st.mean(d["sueno"]), 2) if d["sueno"] else None,
+            "n_sueno": len(d["sueno"]),
         })
     return salida
 
