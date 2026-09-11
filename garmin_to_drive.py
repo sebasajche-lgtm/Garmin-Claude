@@ -58,6 +58,9 @@ CSV_COLUMNS = [
     "actividad_fc_maxima",
     "actividad_fc_recuperacion_2min",
     "actividad_min_zona_alta",
+    "actividad_min_zona2",
+    "actividad_deriva_fc_pct",
+    "actividad_m_h_subida",
     "actividad_desnivel_positivo_m",
     "actividad_altitud_min_msnm",
     "actividad_altitud_max_msnm",
@@ -69,6 +72,7 @@ CSV_COLUMNS = [
     "training_readiness",
     "hrv_promedio_ms",
     "hrv_estado",
+    "spo2_promedio_nocturno",
     "respiracion_promedio",
     "vo2_max",
 ]
@@ -161,8 +165,8 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
                     print(f"[aviso] No se pudo obtener FC de recuperación: {e}")
 
                 try:
-                    # Tiempo (minutos) en zonas altas de FC (4-5), para distinguir
-                    # esfuerzo sostenido real de picos puntuales/ruido de sensor.
+                    # Tiempo (minutos) en zonas de FC, para distinguir esfuerzo
+                    # sostenido real de picos puntuales, y medir % en Z2.
                     zonas = api.get_activity_hr_in_timezones(activity_id)
                     if zonas:
                         segundos_altas = sum(
@@ -171,8 +175,35 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
                             if (z.get("zoneNumber") or 0) >= 4
                         )
                         fila["actividad_min_zona_alta"] = round(segundos_altas / 60, 1)
+                        segundos_z2 = sum(
+                            (z.get("secsInZone") or 0)
+                            for z in zonas
+                            if (z.get("zoneNumber") or 0) == 2
+                        )
+                        fila["actividad_min_zona2"] = round(segundos_z2 / 60, 1)
                 except Exception as e:
                     print(f"[aviso] No se pudo obtener tiempo en zonas de FC: {e}")
+
+                try:
+                    # Splits (vueltas) -- solo da datos utiles si presionaste
+                    # "Lap" en el reloj. Con 2+ vueltas: deriva cardiaca 1a vs
+                    # ultima, y m/h de la vuelta que tenga mas desnivel (subida).
+                    splits = api.get_activity_splits(activity_id)
+                    vueltas = (splits or {}).get("lapDTOs", [])
+                    if len(vueltas) >= 2:
+                        fc_primera = vueltas[0].get("averageHR")
+                        fc_ultima = vueltas[-1].get("averageHR")
+                        if fc_primera and fc_ultima:
+                            deriva = (fc_ultima - fc_primera) / fc_primera * 100
+                            fila["actividad_deriva_fc_pct"] = round(deriva, 1)
+                        for v in vueltas:
+                            gain = v.get("elevationGain") or 0
+                            dur_h = (v.get("duration") or 0) / 3600
+                            if gain > 20 and dur_h > 0:
+                                fila["actividad_m_h_subida"] = round(gain / dur_h, 0)
+                                break
+                except Exception as e:
+                    print(f"[aviso] No se pudieron obtener splits: {e}")
 
             desnivel = principal.get("elevationGain")
             if desnivel is not None:
@@ -237,6 +268,20 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
             fila["hrv_estado"] = resumen.get("status")
     except Exception as e:
         print(f"[aviso] No se pudo obtener HRV: {e}")
+
+    # --- SpO2 nocturno (oxigeno en sangre mientras dormís) ---
+    try:
+        spo2 = api.get_spo2_data(fecha_str)
+        if spo2:
+            valor = (
+                spo2.get("averageSpO2")
+                or spo2.get("avgSleepSpO2")
+                or spo2.get("lastSevenDaysAvgSpO2")
+            )
+            if valor is not None:
+                fila["spo2_promedio_nocturno"] = valor
+    except Exception as e:
+        print(f"[aviso] No se pudo obtener SpO2: {e}")
 
     try:
         respiracion = api.get_respiration_data(fecha_str)
