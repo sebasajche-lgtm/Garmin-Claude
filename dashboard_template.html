@@ -73,6 +73,8 @@
 
   <div class="rango-global">
     <span class="rango-label">Rango:</span>
+    <button data-rango="1s">1 semana</button>
+    <button data-rango="4s">4 semanas</button>
     <button data-rango="8s" class="activo">8 semanas</button>
     <button data-rango="26s">26 semanas</button>
     <button data-rango="52s">52 semanas</button>
@@ -143,6 +145,12 @@
     <div id="semaforoContenido"></div>
   </section>
 
+  <section>
+    <h2>Análisis automático</h2>
+    <p class="subtext">Generado por reglas fijas cada vez que corre la sincronización -- no es una interpretación mía escrita a mano, es el mismo cálculo repetido siempre.</p>
+    <div class="grid2" id="analisisContenido"></div>
+  </section>
+
   <footer>Generado automáticamente <span id="generadoTs"></span> a partir de garmin_historial.csv.</footer>
 </div>
 
@@ -199,7 +207,7 @@ if (DATOS.semaforo && DATOS.semaforo.length > 0) {
 // traduce distinto segun el grafico, pero siempre a la misma
 // ventana real de tiempo.
 // ============================================================
-const SEMANAS_POR_RANGO = { "8s": 8, "26s": 26, "52s": 52, "todo": null };
+const SEMANAS_POR_RANGO = { "1s": 1, "4s": 4, "8s": 8, "26s": 26, "52s": 52, "todo": null };
 
 function recortar(arr, rango, granularidad) {
   const semanas = SEMANAS_POR_RANGO[rango];
@@ -294,6 +302,16 @@ function renderizarTodo(rango) {
     graficos[def.id] = new Chart(document.getElementById(def.id), def.construir(datosRecortados));
   });
 }
+
+// --- Análisis automático ---
+const analisisCont = document.getElementById("analisisContenido");
+(DATOS.analisis || []).forEach(bloque => {
+  const div = document.createElement("div");
+  div.className = "card";
+  const lista = bloque.frases.map(f => `<li>${f}</li>`).join("");
+  div.innerHTML = `<h3 style="margin-top:0;font-size:15px;color:var(--text);">${bloque.titulo}</h3><ul style="margin:0;padding-left:18px;color:var(--text-dim);font-size:14px;line-height:1.7;">${lista}</ul>`;
+  analisisCont.appendChild(div);
+});
 
 renderizarTodo('8s');
 
