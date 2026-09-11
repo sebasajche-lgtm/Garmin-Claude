@@ -36,7 +36,8 @@ def cargar_historial(ruta):
 
 
 def resumen_mensual(rows):
-    meses = defaultdict(lambda: {"hrv": [], "fc": [], "sueno": [], "vo2max": [], "spo2": []})
+    meses = defaultdict(lambda: {"hrv": [], "fc": [], "sueno": [], "vo2max": [], "spo2": [],
+                                   "bb_min": [], "estres": [], "puntaje_sueno": []})
     for r in rows:
         mes = r["fecha"][:7]
         if f(r.get("hrv_promedio_ms")) is not None:
@@ -49,6 +50,13 @@ def resumen_mensual(rows):
             meses[mes]["vo2max"].append(f(r["vo2_max"]))
         if f(r.get("spo2_promedio_nocturno")) is not None:
             meses[mes]["spo2"].append(f(r["spo2_promedio_nocturno"]))
+        if f(r.get("body_battery_min")) is not None:
+            meses[mes]["bb_min"].append(f(r["body_battery_min"]))
+        estres_val = f(r.get("estres_promedio"))
+        if estres_val is not None and estres_val >= 0:  # -1 = sin dato valido de Garmin
+            meses[mes]["estres"].append(estres_val)
+        if f(r.get("puntaje_sueno")) is not None:
+            meses[mes]["puntaje_sueno"].append(f(r["puntaje_sueno"]))
     salida = []
     for mes in sorted(meses):
         d = meses[mes]
@@ -63,6 +71,30 @@ def resumen_mensual(rows):
             "vo2max": round(st.mean(d["vo2max"]), 1) if d["vo2max"] else None,
             "spo2": round(st.mean(d["spo2"]), 1) if d["spo2"] else None,
             "n_spo2": len(d["spo2"]),
+            "bb_min": round(st.mean(d["bb_min"]), 1) if d["bb_min"] else None,
+            "estres": round(st.mean(d["estres"]), 1) if d["estres"] else None,
+            "puntaje_sueno": round(st.mean(d["puntaje_sueno"]), 1) if d["puntaje_sueno"] else None,
+        })
+    return salida
+
+
+def dinamica_carrera_mensual(rows):
+    meses = defaultdict(lambda: {"cadencia": [], "zancada": []})
+    for r in rows:
+        if r.get("actividad_tipo") not in CORRER:
+            continue
+        mes = r["fecha"][:7]
+        if f(r.get("actividad_cadencia_prom")) is not None:
+            meses[mes]["cadencia"].append(f(r["actividad_cadencia_prom"]))
+        if f(r.get("actividad_zancada_cm")) is not None:
+            meses[mes]["zancada"].append(f(r["actividad_zancada_cm"]))
+    salida = []
+    for mes in sorted(meses):
+        d = meses[mes]
+        salida.append({
+            "mes": mes,
+            "cadencia": round(st.mean(d["cadencia"]), 0) if d["cadencia"] else None,
+            "zancada": round(st.mean(d["zancada"]), 1) if d["zancada"] else None,
         })
     return salida
 
@@ -371,6 +403,7 @@ def main():
     datos = {
         "generado": datetime.now().isoformat(timespec="minutes"),
         "mensual": resumen_mensual(rows),
+        "dinamica": dinamica_carrera_mensual(rows),
         "carga_semanal": carga_semanal_por_tipo(rows),
         "cumplimiento": cumplimiento_semanal(rows),
         "eficiencia": eficiencia_aerobica_mensual(rows),
