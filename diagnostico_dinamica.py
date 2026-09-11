@@ -17,7 +17,8 @@ password = os.environ["GARMIN_PASSWORD"]
 api = Garmin(email, password)
 api.login()
 
-ayer = (date.today() - timedelta(days=1)).isoformat()
+import sys
+ayer = sys.argv[1] if len(sys.argv) > 1 else (date.today() - timedelta(days=1)).isoformat()
 actividades = api.get_activities_by_date(ayer, ayer)
 
 if not actividades:
