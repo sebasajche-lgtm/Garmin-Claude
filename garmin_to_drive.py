@@ -167,11 +167,11 @@ def obtener_datos_garmin(api: Garmin, fecha_str: str) -> dict:
                     if recuperacion is not None:
                         fila["actividad_fc_recuperacion_2min"] = recuperacion
 
-                    cadencia = resumen.get("averageRunningCadenceInStepsPerMinute") or resumen.get("avgRunCadence")
+                    cadencia = resumen.get("averageRunCadence")
                     if cadencia is not None:
                         fila["actividad_cadencia_prom"] = round(cadencia, 0)
 
-                    zancada = resumen.get("avgStrideLength")
+                    zancada = resumen.get("strideLength")
                     if zancada is not None:
                         fila["actividad_zancada_cm"] = round(zancada, 1)
 
