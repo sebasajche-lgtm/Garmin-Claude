@@ -218,14 +218,24 @@ function construirHrv(datos) { return {
     { label:'HRV (ms)', data: datos.map(m=>m.hrv), borderColor:'#5a9aa0', backgroundColor:'transparent', tension:0.3, borderWidth:2 },
     { label:'FC reposo (lpm)', data: datos.map(m=>m.fc), borderColor:'#b1573f', backgroundColor:'transparent', tension:0.3, borderWidth:2, yAxisID:'y1' }
   ]},
-  options:{ plugins:{legend:{labels:{color:fontColor,font:{size:11}}}},
+  options:{ plugins:{
+      legend:{labels:{color:fontColor,font:{size:11}}},
+      tooltip:{ callbacks:{ afterLabel: (ctx) => {
+        const m = datos[ctx.dataIndex];
+        return ctx.datasetIndex === 0 ? `(${m.n_hrv} noches con dato)` : `(${m.n_fc} noches con dato)`;
+      }}}
+    },
     scales:{ x:{ticks:{color:fontColor},grid:{color:gridColor}}, y:{ticks:{color:fontColor},grid:{color:gridColor}}, y1:{ticks:{color:fontColor},grid:{display:false},position:'right'} } }
 };}
 
 function construirSleep(datos) { return {
   type:'bar',
   data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Horas de sueño', data: datos.map(m=>m.sueno), backgroundColor:'#d2a24c'}] },
-  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:9} } }
+  options:{ plugins:{
+      legend:{display:false},
+      tooltip:{ callbacks:{ afterLabel: (ctx) => `(${datos[ctx.dataIndex].n_sueno} noches con dato)` }}
+    },
+    scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:9} } }
 };}
 
 function construirPMC(datos) { return {
