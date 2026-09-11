@@ -51,6 +51,12 @@
   .legend span{display:inline-flex;align-items:center;gap:6px;}
   .dot{width:9px;height:9px;border-radius:2px;display:inline-block;}
   .empty-note{color:var(--text-dim);font-size:14px;padding:16px 18px;border:1px dashed var(--line);border-radius:8px;background:var(--panel-2);}
+  .rango-botones{display:flex;gap:8px;margin-bottom:14px;}
+  .rango-botones button{
+    font-family:var(--sans);font-size:12.5px;color:var(--text-dim);background:var(--panel-2);
+    border:1px solid var(--line);border-radius:6px;padding:5px 12px;cursor:pointer;
+  }
+  .rango-botones button.activo{color:var(--sage);border-color:var(--sage);background:rgba(122,161,126,0.1);}
   footer{color:var(--text-dim);font-size:12px;margin-top:56px;border-top:1px solid var(--line);padding-top:16px;}
 </style>
 </head>
@@ -75,7 +81,7 @@
 
   <section>
     <h2>Recuperación — tendencia</h2>
-    <p class="subtext">Promedios mensuales, calculados de nuevo cada vez.</p>
+    <p class="subtext">Promedios mensuales, calculados de nuevo cada vez. <strong>HRV:</strong> más alto = mejor recuperación; una baja sostenida varias semanas es fatiga acumulada. <strong>FC en reposo:</strong> al revés, más bajo = mejor; una subida sostenida indica fatiga, estrés o enfermedad.</p>
     <div class="grid2">
       <div class="card chart-card"><h3>HRV y frecuencia cardiaca en reposo</h3><canvas id="chartHrv" height="230"></canvas></div>
       <div class="card chart-card"><h3>Sueño promedio (meta: 7h)</h3><canvas id="chartSleep" height="230"></canvas></div>
@@ -84,14 +90,15 @@
 
   <section>
     <h2>Carga vs. fatiga (CTL / ATL / TSB)</h2>
-    <p class="subtext">Proxy propio inspirado en el Performance Management Chart: CTL = condición de fondo (promedio móvil 42 días), ATL = fatiga reciente (7 días), TSB = CTL − ATL. Positivo = fresco; negativo = fatigado.</p>
+    <p class="subtext">CTL (verde) = condición de fondo. ATL (rojo) = fatiga reciente. <strong>TSB (línea punteada, la que más importa):</strong> positivo = descansado y listo para rendir; entre -10 y -30 = entrenando duro, normal en bloques de carga; por debajo de -30 = riesgo alto de fatiga o lesión.</p>
     <div class="card chart-card"><canvas id="chartPMC" height="200"></canvas></div>
   </section>
 
   <section>
     <h2>Carga de entreno por tipo</h2>
-    <p class="subtext">Minutos por semana, últimas 11 semanas.</p>
+    <p class="subtext">Minutos totales entrenados por semana, divididos por tipo de actividad (colores abajo).</p>
     <div class="card chart-card">
+      <div class="rango-botones" data-target="carga"></div>
       <canvas id="chartCarga" height="200"></canvas>
       <div class="legend">
         <span><span class="dot" style="background:#7ba17e"></span>Correr / trail</span>
@@ -114,7 +121,10 @@
 
   <section>
     <h2>Cumplimiento semanal (meta: 4+ sesiones/semana)</h2>
-    <div class="card chart-card"><canvas id="chartCumplimiento" height="170"></canvas></div>
+    <div class="card chart-card">
+      <div class="rango-botones" data-target="cumplimiento"></div>
+      <canvas id="chartCumplimiento" height="170"></canvas>
+    </div>
   </section>
 
   <section>
@@ -181,16 +191,36 @@ new Chart(document.getElementById('chartPMC'), {
     scales:{ x:{ticks:{color:fontColor,maxTicksLimit:12,font:{size:9}},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}} } }
 });
 
-// --- Carga semanal ---
-new Chart(document.getElementById('chartCarga'), {
+// --- Gráficos con selector de rango (8 semanas / todo) ---
+function graficoConRango(canvasId, targetSelector, datosCompletos, construirConfig) {
+  const contenedorBotones = document.querySelector(`.rango-botones[data-target="${targetSelector}"]`);
+  const btn8 = document.createElement("button");
+  btn8.textContent = "8 semanas"; btn8.className = "activo";
+  const btnTodo = document.createElement("button");
+  btnTodo.textContent = "Todo el historial";
+  contenedorBotones.appendChild(btn8);
+  contenedorBotones.appendChild(btnTodo);
+
+  let chart = new Chart(document.getElementById(canvasId), construirConfig(datosCompletos.slice(-8)));
+
+  function activar(boton, otro, datos) {
+    boton.classList.add("activo"); otro.classList.remove("activo");
+    chart.destroy();
+    chart = new Chart(document.getElementById(canvasId), construirConfig(datos));
+  }
+  btn8.addEventListener("click", () => activar(btn8, btnTodo, datosCompletos.slice(-8)));
+  btnTodo.addEventListener("click", () => activar(btnTodo, btn8, datosCompletos));
+}
+
+graficoConRango('chartCarga', 'carga', DATOS.carga_semanal, (datos) => ({
   type:'bar',
-  data:{ labels: DATOS.carga_semanal.map(s=>s.semana.slice(5)), datasets:[
-    {label:'Correr/trail', data: DATOS.carga_semanal.map(s=>s.correr), backgroundColor:'#7ba17e'},
-    {label:'Bici', data: DATOS.carga_semanal.map(s=>s.bici), backgroundColor:'#5a9aa0'},
-    {label:'Fuerza', data: DATOS.carga_semanal.map(s=>s.fuerza), backgroundColor:'#d2a24c'}
+  data:{ labels: datos.map(s=>s.semana.slice(5)), datasets:[
+    {label:'Correr/trail', data: datos.map(s=>s.correr), backgroundColor:'#7ba17e'},
+    {label:'Bici', data: datos.map(s=>s.bici), backgroundColor:'#5a9aa0'},
+    {label:'Fuerza', data: datos.map(s=>s.fuerza), backgroundColor:'#d2a24c'}
   ]},
   options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor,font:{size:10.5}},grid:{display:false},stacked:true}, y:{ticks:{color:fontColor},grid:{color:gridColor},stacked:true,title:{display:true,text:'minutos',color:fontColor,font:{size:11}}} } }
-});
+}));
 
 // --- Altitud ---
 new Chart(document.getElementById('chartAltitud'), {
@@ -207,11 +237,11 @@ new Chart(document.getElementById('chartEficiencia'), {
 });
 
 // --- Cumplimiento ---
-new Chart(document.getElementById('chartCumplimiento'), {
+graficoConRango('chartCumplimiento', 'cumplimiento', DATOS.cumplimiento, (datos) => ({
   type:'bar',
-  data:{ labels: DATOS.cumplimiento.map(s=>s.semana.slice(5)), datasets:[{data: DATOS.cumplimiento.map(s=>s.n), backgroundColor: DATOS.cumplimiento.map(s=>s.n>=4?'#7ba17e':'#2d413a')}] },
+  data:{ labels: datos.map(s=>s.semana.slice(5)), datasets:[{data: datos.map(s=>s.n), backgroundColor: datos.map(s=>s.n>=4?'#7ba17e':'#2d413a')}] },
   options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor,maxRotation:90,minRotation:90,font:{size:9}},grid:{display:false}}, y:{ticks:{color:fontColor,stepSize:1},grid:{color:gridColor},suggestedMax:6} } }
-});
+}));
 
 // --- Semaforo ---
 document.getElementById("notaSemaforo").textContent = DATOS.nota_semaforo || "";
