@@ -1,425 +1,408 @@
-"""
-generar_dashboard.py
-----------------------
-Genera dashboard.html completo a partir de garmin_historial.csv (y, si existe,
-el plan de entrenamiento vigente). No hay ningún número escrito a mano -- todo
-se calcula de nuevo cada vez que corre este script.
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de entrenamiento — Sebastián</title>
+<script src="chart.umd.js"></script>
+<style>
+  :root{
+    --bg:#131c1a; --panel:#1b2723; --panel-2:#22322c; --line:#2d413a;
+    --text:#eae7de; --text-dim:#96a89f;
+    --sage:#7ba17e; --ochre:#d2a24c; --rust:#b1573f; --teal:#5a9aa0;
+    --mono: ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 20px 80px;}
+  header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:36px;}
+  header.top h1{font-size:26px;margin:0 0 6px;font-weight:600;letter-spacing:-0.01em;}
+  header.top p{margin:0;color:var(--text-dim);font-size:14px;}
+  .goal-tag{font-family:var(--mono);font-size:12.5px;color:var(--sage);background:rgba(122,161,126,0.1);border:1px solid rgba(122,161,126,0.3);padding:6px 12px;border-radius:6px;white-space:nowrap;}
+  .hero{display:grid;grid-template-columns:200px 1fr;gap:28px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px;margin-bottom:44px;}
+  @media (max-width:640px){.hero{grid-template-columns:1fr;}}
+  .ring{width:160px;height:160px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;flex-direction:column;border:3px solid var(--rust);}
+  .ring.verde{border-color:var(--sage);}
+  .ring.amarillo{border-color:var(--ochre);}
+  .ring .estado{font-size:15px;font-weight:600;letter-spacing:0.02em;}
+  .ring .fc{font-family:var(--mono);font-size:26px;font-weight:600;margin-top:4px;}
+  .ring .fc small{font-size:12px;color:var(--text-dim);font-weight:400;}
+  .ring .fecha{font-size:11px;color:var(--text-dim);margin-top:4px;font-family:var(--mono);}
+  .criterios h3{margin:0 0 4px;font-size:13px;color:var(--text-dim);font-weight:500;}
+  .criterio-row{display:flex;justify-content:space-between;align-items:center;font-size:14.5px;padding:9px 12px;border-radius:7px;background:var(--panel-2);margin-bottom:8px;}
+  .criterio-row .marca{font-family:var(--mono);font-size:13px;}
+  .marca.alerta{color:var(--rust);} .marca.ok{color:var(--sage);}
+  section{margin-bottom:48px;}
+  h2{font-size:17px;font-weight:600;margin:0 0 6px;}
+  .subtext{color:var(--text-dim);font-size:13.5px;margin:0 0 20px;max-width:600px;}
+  .grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;}
+  @media (max-width:760px){.grid2{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;}
+  .chart-card h3{margin:0 0 4px;font-size:13.5px;color:var(--text-dim);font-weight:500;}
+  canvas{max-width:100%;}
+  table.plan{width:100%;border-collapse:collapse;font-size:14px;}
+  table.plan th{text-align:left;color:var(--text-dim);font-weight:500;font-size:11.5px;padding:8px 10px;border-bottom:1px solid var(--line);}
+  table.plan td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  table.plan tr:last-child td{border-bottom:none;}
+  .semaforo{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;position:relative;top:-1px;}
+  .semaforo.verde{background:var(--sage);} .semaforo.amarillo{background:var(--ochre);} .semaforo.rojo{background:var(--rust);}
+  .legend{display:flex;gap:18px;font-size:12.5px;color:var(--text-dim);margin-top:14px;flex-wrap:wrap;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:9px;height:9px;border-radius:2px;display:inline-block;}
+  .empty-note{color:var(--text-dim);font-size:14px;padding:16px 18px;border:1px dashed var(--line);border-radius:8px;background:var(--panel-2);}
+  .rango-global{
+    display:flex; align-items:center; gap:8px; margin-bottom:24px;
+    padding:10px 14px; background:var(--panel); border:1px solid var(--line); border-radius:8px;
+  }
+  .rango-label{ font-size:12.5px; color:var(--text-dim); margin-right:4px; }
+  .rango-global button{
+    font-family:var(--sans);font-size:12.5px;color:var(--text-dim);background:var(--panel-2);
+    border:1px solid var(--line);border-radius:6px;padding:5px 12px;cursor:pointer;
+  }
+  .rango-global button.activo{color:var(--sage);border-color:var(--sage);background:rgba(122,161,126,0.1);}
+  footer{color:var(--text-dim);font-size:12px;margin-top:56px;border-top:1px solid var(--line);padding-top:16px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div><h1>Panel de entrenamiento</h1><p>Sebastián Sajche — generado automáticamente desde Garmin Connect</p></div>
+    <div class="goal-tag" id="metaTag"></div>
+  </header>
 
-Uso: python generar_dashboard.py <ruta_historial.csv> [<ruta_plan.csv>]
-Genera: dashboard.html en el directorio actual.
-"""
+  <div class="rango-global">
+    <span class="rango-label">Rango:</span>
+    <button data-rango="1s">1 semana</button>
+    <button data-rango="4s">4 semanas</button>
+    <button data-rango="8s" class="activo">8 semanas</button>
+    <button data-rango="26s">26 semanas</button>
+    <button data-rango="52s">52 semanas</button>
+    <button data-rango="todo">Todo</button>
+  </div>
 
-import sys
-import csv
-import json
-import statistics as st
-from datetime import date, timedelta, datetime
-from collections import defaultdict
+  <div class="hero">
+    <div class="ring" id="ring">
+      <div class="estado" id="estadoTexto"></div>
+      <div class="fc" id="fcRing"></div>
+      <div class="fecha" id="fechaHero"></div>
+    </div>
+    <div class="criterios">
+      <h3>Cómo se calcula — sin caja negra</h3>
+      <div id="criteriosLista"></div>
+    </div>
+  </div>
 
-FC_MAX_REFERENCIA = 181  # ajustar tras cada test de FC max; ver README
+  <section>
+    <h2>Recuperación — tendencia</h2>
+    <p class="subtext">Promedios mensuales, calculados de nuevo cada vez. <strong>HRV:</strong> más alto = mejor recuperación; una baja sostenida varias semanas es fatiga acumulada. <strong>FC en reposo:</strong> al revés, más bajo = mejor; una subida sostenida indica fatiga, estrés o enfermedad.</p>
+    <div class="grid2">
+      <div class="card chart-card"><h3>HRV y frecuencia cardiaca en reposo</h3><canvas id="chartHrv" height="230"></canvas></div>
+      <div class="card chart-card"><h3>Sueño promedio (meta: 7h)</h3><canvas id="chartSleep" height="230"></canvas></div>
+    </div>
+  </section>
 
-PIE = {"running", "trail_running", "treadmill_running", "walking", "mountaineering", "other"}
-BICI = {"cycling", "indoor_cycling"}
-CORRER = {"running", "trail_running", "treadmill_running"}
+  <section>
+    <h2>Carga vs. fatiga (CTL / ATL / TSB)</h2>
+    <p class="subtext">CTL (verde) = condición de fondo. ATL (rojo) = fatiga reciente. <strong>TSB (línea punteada, la que más importa):</strong> positivo = descansado y listo para rendir; entre -10 y -30 = entrenando duro, normal en bloques de carga; por debajo de -30 = riesgo alto de fatiga o lesión.</p>
+    <div class="card chart-card"><canvas id="chartPMC" height="200"></canvas></div>
+  </section>
 
+  <section>
+    <h2>Carga de entreno por tipo</h2>
+    <p class="subtext">Minutos totales entrenados por semana, divididos por tipo de actividad (colores abajo).</p>
+    <div class="card chart-card">
+      <canvas id="chartCarga" height="200"></canvas>
+      <div class="legend">
+        <span><span class="dot" style="background:#7ba17e"></span>Correr / trail</span>
+        <span><span class="dot" style="background:#5a9aa0"></span>Bici</span>
+        <span><span class="dot" style="background:#d2a24c"></span>Fuerza</span>
+      </div>
+    </div>
+  </section>
 
-def f(v):
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
+  <section>
+    <h2>Exposición a altitud — % del tiempo ≥2,000 msnm</h2>
+    <div class="card chart-card"><canvas id="chartAltitud" height="180"></canvas></div>
+  </section>
 
+  <section>
+    <h2>SpO2 nocturno — oxígeno en sangre mientras dormís</h2>
+    <p class="subtext">Relevante por vivir/entrenar en altura. Rango normal habitual: 95-100%. Caídas sostenidas pueden señalar estrés respiratorio nocturno, mala calidad de sueño, o necesidad de más aclimatación.</p>
+    <div class="card chart-card"><canvas id="chartSpo2" height="180"></canvas></div>
+  </section>
 
-def cargar_historial(ruta):
-    with open(ruta, encoding="utf-8") as fh:
-        return list(csv.DictReader(fh))
+  <section>
+    <h2>Body Battery y estrés</h2>
+    <p class="subtext">Body Battery mínimo: qué tan "vacío" terminás el día (más alto = mejor margen). Estrés: promedio diario de Garmin (más bajo = mejor).</p>
+    <div class="grid2">
+      <div class="card chart-card"><h3>Body Battery mínimo diario</h3><canvas id="chartBB" height="200"></canvas></div>
+      <div class="card chart-card"><h3>Estrés promedio</h3><canvas id="chartEstres" height="200"></canvas></div>
+    </div>
+  </section>
 
+  <section>
+    <h2>Puntaje de sueño (Garmin)</h2>
+    <p class="subtext">Número compuesto de Garmin (0-100) que combina duración, fases y continuidad -- más completo que solo "horas dormidas".</p>
+    <div class="card chart-card"><canvas id="chartPuntajeSueno" height="180"></canvas></div>
+  </section>
 
-def resumen_mensual(rows):
-    meses = defaultdict(lambda: {"hrv": [], "fc": [], "sueno": [], "vo2max": [], "spo2": [],
-                                   "bb_min": [], "estres": [], "puntaje_sueno": []})
-    for r in rows:
-        mes = r["fecha"][:7]
-        if f(r.get("hrv_promedio_ms")) is not None:
-            meses[mes]["hrv"].append(f(r["hrv_promedio_ms"]))
-        if f(r.get("fc_reposo")) is not None:
-            meses[mes]["fc"].append(f(r["fc_reposo"]))
-        if f(r.get("sueno_horas")) is not None:
-            meses[mes]["sueno"].append(f(r["sueno_horas"]))
-        if f(r.get("vo2_max")) is not None:
-            meses[mes]["vo2max"].append(f(r["vo2_max"]))
-        if f(r.get("spo2_promedio_nocturno")) is not None:
-            meses[mes]["spo2"].append(f(r["spo2_promedio_nocturno"]))
-        if f(r.get("body_battery_min")) is not None:
-            meses[mes]["bb_min"].append(f(r["body_battery_min"]))
-        estres_val = f(r.get("estres_promedio"))
-        if estres_val is not None and estres_val >= 0:  # -1 = sin dato valido de Garmin
-            meses[mes]["estres"].append(estres_val)
-        if f(r.get("puntaje_sueno")) is not None:
-            meses[mes]["puntaje_sueno"].append(f(r["puntaje_sueno"]))
-    salida = []
-    for mes in sorted(meses):
-        d = meses[mes]
-        salida.append({
-            "mes": mes,
-            "hrv": round(st.mean(d["hrv"]), 1) if d["hrv"] else None,
-            "n_hrv": len(d["hrv"]),
-            "fc": round(st.mean(d["fc"]), 1) if d["fc"] else None,
-            "n_fc": len(d["fc"]),
-            "sueno": round(st.mean(d["sueno"]), 2) if d["sueno"] else None,
-            "n_sueno": len(d["sueno"]),
-            "vo2max": round(st.mean(d["vo2max"]), 1) if d["vo2max"] else None,
-            "spo2": round(st.mean(d["spo2"]), 1) if d["spo2"] else None,
-            "n_spo2": len(d["spo2"]),
-            "bb_min": round(st.mean(d["bb_min"]), 1) if d["bb_min"] else None,
-            "estres": round(st.mean(d["estres"]), 1) if d["estres"] else None,
-            "puntaje_sueno": round(st.mean(d["puntaje_sueno"]), 1) if d["puntaje_sueno"] else None,
-        })
-    return salida
+  <section>
+    <h2>Dinámica de carrera — cadencia y zancada</h2>
+    <p class="subtext">Solo en actividades de correr/trail. Cadencia ideal suele rondar 170-180 pasos/min (referencia general, no una regla estricta). Zancada más larga no siempre es mejor -- depende de que se mantenga eficiente.</p>
+    <div class="card chart-card"><canvas id="chartDinamica" height="200"></canvas></div>
+  </section>
 
+  <section>
+    <h2>VO2 max — tendencia</h2>
+    <p class="subtext">Estimado por Garmin. Sube = mejor capacidad aeróbica máxima; cambia lento (semanas/meses), no esperes saltos de un día para otro.</p>
+    <div class="card chart-card"><canvas id="chartVo2" height="180"></canvas></div>
+  </section>
 
-def dinamica_carrera_mensual(rows):
-    meses = defaultdict(lambda: {"cadencia": [], "zancada": []})
-    for r in rows:
-        if r.get("actividad_tipo") not in CORRER:
-            continue
-        mes = r["fecha"][:7]
-        if f(r.get("actividad_cadencia_prom")) is not None:
-            meses[mes]["cadencia"].append(f(r["actividad_cadencia_prom"]))
-        if f(r.get("actividad_zancada_cm")) is not None:
-            meses[mes]["zancada"].append(f(r["actividad_zancada_cm"]))
-    salida = []
-    for mes in sorted(meses):
-        d = meses[mes]
-        salida.append({
-            "mes": mes,
-            "cadencia": round(st.mean(d["cadencia"]), 0) if d["cadencia"] else None,
-            "zancada": round(st.mean(d["zancada"]), 1) if d["zancada"] else None,
-        })
-    return salida
+  <section>
+    <h2>Eficiencia aeróbica — velocidad por latido</h2>
+    <p class="subtext">Solo sesiones relativamente planas (comparables). Sube = mejor condición a igual esfuerzo cardiaco.</p>
+    <div class="card chart-card"><canvas id="chartEficiencia" height="180"></canvas></div>
+  </section>
 
+  <section>
+    <h2>Cumplimiento semanal (meta: 4+ sesiones/semana)</h2>
+    <div class="card chart-card">
+      <canvas id="chartCumplimiento" height="170"></canvas>
+    </div>
+  </section>
 
-def promedio_en_rango(rows, dias, campo):
-    fecha_max = date.fromisoformat(rows[-1]["fecha"])
-    fecha_min = fecha_max - timedelta(days=dias - 1)
-    vals = [f(r[campo]) for r in rows if fecha_min <= date.fromisoformat(r["fecha"]) <= fecha_max and f(r.get(campo)) is not None]
-    return round(st.mean(vals), 2) if vals else None
+  <section>
+    <h2>Semáforo semanal</h2>
+    <p class="subtext" id="notaSemaforo"></p>
+    <div id="semaforoContenido"></div>
+  </section>
 
+  <section>
+    <h2>Análisis automático</h2>
+    <p class="subtext">Generado por reglas fijas cada vez que corre la sincronización -- no es una interpretación mía escrita a mano, es el mismo cálculo repetido siempre.</p>
+    <div class="grid2" id="analisisContenido"></div>
+  </section>
 
-def analisis_periodo(rows, dias, etiqueta):
-    fecha_max = date.fromisoformat(rows[-1]["fecha"])
-    fecha_min = fecha_max - timedelta(days=dias - 1)
-    fecha_min_prev = fecha_min - timedelta(days=dias)
-    en_rango = [r for r in rows if fecha_min <= date.fromisoformat(r["fecha"]) <= fecha_max]
-    en_rango_prev = [r for r in rows if fecha_min_prev <= date.fromisoformat(r["fecha"]) < fecha_min]
+  <footer>Generado automáticamente <span id="generadoTs"></span> a partir de garmin_historial.csv.</footer>
+</div>
 
-    def prom(filas, campo):
-        vals = [f(r[campo]) for r in filas if f(r.get(campo)) is not None]
-        return round(st.mean(vals), 1) if vals else None
+<script>
+const DATOS = __DATOS_JSON__;
+const fontColor = "#96a89f";
+const gridColor = "rgba(255,255,255,0.06)";
+const nombresMeses = {"01":"Ene","02":"Feb","03":"Mar","04":"Abr","05":"May","06":"Jun","07":"Jul","08":"Ago","09":"Sep","10":"Oct","11":"Nov","12":"Dic"};
+const nombreMes = (m) => nombresMeses[m.slice(5,7)] + "'" + m.slice(2,4);
 
-    hrv, hrv_prev = prom(en_rango, "hrv_promedio_ms"), prom(en_rango_prev, "hrv_promedio_ms")
-    fc, fc_prev = prom(en_rango, "fc_reposo"), prom(en_rango_prev, "fc_reposo")
-    sueno, sueno_prev = prom(en_rango, "sueno_horas"), prom(en_rango_prev, "sueno_horas")
+document.getElementById("generadoTs").textContent = DATOS.generado;
 
-    dist = round(sum(f(r.get("actividad_distancia_km")) or 0 for r in en_rango), 1)
-    desn = round(sum(f(r.get("actividad_desnivel_positivo_m")) or 0 for r in en_rango))
-    dias_act = sum(1 for r in en_rango if r.get("actividad_tipo"))
+// --- Hero (no depende del rango, siempre es "hoy") ---
+const hoy = DATOS.hoy;
+document.getElementById("ring").classList.add(hoy.estado.toLowerCase());
+document.getElementById("estadoTexto").textContent = hoy.estado;
+document.getElementById("fcRing").innerHTML = (hoy.fc_reposo ?? "—") + "<small> lpm</small>";
+document.getElementById("fechaHero").textContent = hoy.fecha;
+document.getElementById("metaTag").textContent = "Última actualización: " + hoy.fecha;
+const listaCriterios = document.getElementById("criteriosLista");
+hoy.criterios.forEach(c => {
+  const div = document.createElement("div");
+  div.className = "criterio-row";
+  div.innerHTML = `<span>${c.label}</span><span class="marca ${c.alerta ? 'alerta' : 'ok'}">${c.detalle} — ${c.alerta ? 'alerta' : 'normal'}</span>`;
+  listaCriterios.appendChild(div);
+});
 
-    frases = []
-
-    if hrv is not None and hrv_prev is not None:
-        cambio = round((hrv - hrv_prev) / hrv_prev * 100)
-        direccion = "mejoró" if cambio > 3 else ("empeoró" if cambio < -3 else "se mantuvo estable")
-        frases.append(f"HRV promedio {hrv} ms ({direccion}, {cambio:+d}% vs. el período previo de {dias} días).")
-    elif hrv is not None:
-        frases.append(f"HRV promedio {hrv} ms (sin período previo completo para comparar).")
-
-    if fc is not None and fc_prev is not None:
-        cambio = round((fc - fc_prev) / fc_prev * 100)
-        direccion = "mejoró" if cambio < -2 else ("empeoró" if cambio > 2 else "se mantuvo estable")
-        frases.append(f"FC en reposo promedio {fc} lpm ({direccion}, {cambio:+d}% vs. el período previo).")
-
-    if sueno is not None:
-        alerta = " -- por debajo de la meta de 7h" if sueno < 7 else ""
-        frases.append(f"Sueño promedio {sueno}h{alerta}.")
-
-    frases.append(f"{dias_act} días con actividad, {dist} km recorridos, {desn} m de desnivel acumulado.")
-
-    return {"titulo": etiqueta, "frases": frases}
-
-
-def resumen_pmc_actual(pmc):
-    if not pmc:
-        return None
-    ultimo = pmc[-1]
-    tsb = ultimo["tsb"]
-    if tsb > 5:
-        lectura = "descansado, con margen para asumir carga fuerte"
-    elif tsb > -10:
-        lectura = "en equilibrio, carga sostenible"
-    elif tsb > -30:
-        lectura = "cargado -- normal en bloques de entreno duro, vigilar los próximos días"
-    else:
-        lectura = "muy fatigado -- riesgo elevado, considerar descanso"
-    return f"TSB actual: {tsb} ({lectura})."
-
-
-def carga_semanal_por_tipo(rows):
-    semanas = defaultdict(lambda: {"correr": 0, "bici": 0, "fuerza": 0})
-    for r in rows:
-        if not r.get("actividad_tipo"):
-            continue
-        fecha = date.fromisoformat(r["fecha"])
-        dur = f(r.get("actividad_duracion_min")) or 0
-        tipo = r["actividad_tipo"]
-        year, week, _ = fecha.isocalendar()
-        lunes = date.fromisocalendar(year, week, 1).isoformat()
-        if tipo in CORRER:
-            semanas[lunes]["correr"] += dur
-        elif tipo in BICI:
-            semanas[lunes]["bici"] += dur
-        elif tipo == "strength_training":
-            semanas[lunes]["fuerza"] += dur
-    return [{"semana": s, **{k: round(v) for k, v in vals.items()}} for s, vals in sorted(semanas.items())]
-
-
-def cumplimiento_semanal(rows):
-    semanas = defaultdict(int)
-    for r in rows:
-        if r.get("actividad_tipo") in PIE or r.get("actividad_tipo") in BICI:
-            fecha = date.fromisoformat(r["fecha"])
-            year, week, _ = fecha.isocalendar()
-            lunes = date.fromisocalendar(year, week, 1).isoformat()
-            semanas[lunes] += 1
-    return [{"semana": s, "n": n} for s, n in sorted(semanas.items())]
-
-
-def eficiencia_aerobica_mensual(rows, densidad_max=15):
-    meses = defaultdict(list)
-    for r in rows:
-        tipo = r.get("actividad_tipo")
-        dist = f(r.get("actividad_distancia_km"))
-        desn = f(r.get("actividad_desnivel_positivo_m")) or 0
-        fc = f(r.get("actividad_fc_promedio"))
-        dur = f(r.get("actividad_duracion_min"))
-        if tipo not in CORRER or not dist or not fc or not dur or dist <= 0:
-            continue
-        if desn / dist > densidad_max:
-            continue
-        velocidad_kmh = dist / (dur / 60)
-        ef = velocidad_kmh / fc
-        meses[r["fecha"][:7]].append(ef)
-    return [{"mes": m, "ef": round(st.mean(v), 4), "n": len(v)} for m, v in sorted(meses.items())]
-
-
-def exposicion_altitud_mensual(rows, umbral=2000):
-    meses = defaultdict(lambda: [0, 0])
-    for r in rows:
-        dur = f(r.get("actividad_duracion_min"))
-        alt = f(r.get("actividad_altitud_max_msnm"))
-        if not dur or alt is None:
-            continue
-        mes = r["fecha"][:7]
-        meses[mes][1] += dur
-        if alt >= umbral:
-            meses[mes][0] += dur
-    return [{"mes": m, "pct": round(v[0] / v[1] * 100) if v[1] else 0} for m, v in sorted(meses.items())]
-
-
-def carga_diaria_proxy(rows):
-    """TRIMP de Banister (1991) -- la version validada cientificamente, usando
-    FC de reserva (no solo %FC max). Requiere FC en reposo del dia + FC
-    promedio de la actividad; ambos datos ya los capturamos.
-    y = 0.64 * e^(1.92 * HRr) es la constante para hombres (Banister usa 1.67
-    para mujeres). Cambiar el exponente si corresponde.
-    """
-    import math
-    cargas = {}
-    for r in rows:
-        dur = f(r.get("actividad_duracion_min")) or 0
-        fc_actividad = f(r.get("actividad_fc_promedio"))
-        fc_reposo = f(r.get("fc_reposo"))
-        if not dur or not fc_actividad or not fc_reposo:
-            cargas[r["fecha"]] = 0
-            continue
-        hrr = (fc_actividad - fc_reposo) / (FC_MAX_REFERENCIA - fc_reposo)
-        hrr = max(0, min(1, hrr))  # acotar a [0,1] por seguridad
-        y = 0.64 * math.exp(1.92 * hrr)
-        cargas[r["fecha"]] = dur * hrr * y
-    return cargas
-
-
-def ctl_atl_tsb(rows):
-    cargas = carga_diaria_proxy(rows)
-    fechas = sorted(cargas.keys())
-    if not fechas:
-        return []
-    inicio = date.fromisoformat(fechas[0])
-    fin = date.fromisoformat(fechas[-1])
-    serie = []
-    d = inicio
-    ctl = atl = 0.0
-    while d <= fin:
-        c = cargas.get(d.isoformat(), 0)
-        ctl += (c - ctl) / 42
-        atl += (c - atl) / 7
-        serie.append({"fecha": d.isoformat(), "ctl": round(ctl, 1), "atl": round(atl, 1), "tsb": round(ctl - atl, 1)})
-        d += timedelta(days=1)
-    return serie
-
-
-def estado_del_dia(rows):
-    ultimo = rows[-1]
-    anteriores = rows[-31:-1] if len(rows) > 30 else rows[:-1]
-
-    hrv_base = [f(r["hrv_promedio_ms"]) for r in anteriores if f(r.get("hrv_promedio_ms"))]
-    fc_base = [f(r["fc_reposo"]) for r in anteriores if f(r.get("fc_reposo"))]
-
-    hrv_hoy = f(ultimo.get("hrv_promedio_ms"))
-    fc_hoy = f(ultimo.get("fc_reposo"))
-    sueno_hoy = f(ultimo.get("sueno_horas"))
-
-    hrv_prom = round(st.mean(hrv_base), 1) if hrv_base else None
-    fc_prom = round(st.mean(fc_base), 1) if fc_base else None
-
-    alertas = []
-    criterios = []
-
-    if hrv_hoy is not None and hrv_prom:
-        pct = round(hrv_hoy / hrv_prom * 100)
-        alerta = pct < 90
-        if alerta:
-            alertas.append("hrv")
-        criterios.append({"label": "HRV vs. promedio 30 días",
-                           "detalle": f"{hrv_hoy} ms · {pct}% del promedio ({hrv_prom})",
-                           "alerta": alerta})
-    if sueno_hoy is not None:
-        alerta = sueno_hoy < 6.5
-        if alerta:
-            alertas.append("sueno")
-        criterios.append({"label": "Sueño anoche", "detalle": f"{sueno_hoy}h · meta 7h", "alerta": alerta})
-    if fc_hoy is not None and fc_prom:
-        pct = round(fc_hoy / fc_prom * 100)
-        alerta = pct > 105
-        if alerta:
-            alertas.append("fc")
-        criterios.append({"label": "FC en reposo vs. promedio 30 días",
-                           "detalle": f"{fc_hoy} lpm · {pct}% del promedio ({fc_prom})",
-                           "alerta": alerta})
-
-    n_alertas = len(alertas)
-    estado = "Verde" if n_alertas == 0 else ("Amarillo" if n_alertas == 1 else "Rojo")
-    return {
-        "estado": estado,
-        "fecha": ultimo["fecha"],
-        "fc_reposo": fc_hoy,
-        "criterios": criterios,
-    }
-
-
-def cargar_plan(ruta):
-    if not ruta:
-        return None
-    try:
-        with open(ruta, encoding="utf-8") as fh:
-            return list(csv.DictReader(fh))
-    except FileNotFoundError:
-        return None
-
-
-AREA_POR_SESION = {
-    "trote_montana": "Aeróbico",
-    "fondo_plano": "Deriva del domingo",
-    "ruck": "Ruck",
-    "gym_A": "Gym",
-    "gym_B": "Gym",
+// --- Semáforo (no depende del rango, siempre es "la última semana") ---
+document.getElementById("notaSemaforo").textContent = DATOS.nota_semaforo || "";
+const cont = document.getElementById("semaforoContenido");
+if (DATOS.semaforo && DATOS.semaforo.length > 0) {
+  const tabla = document.createElement("table");
+  tabla.className = "plan";
+  tabla.innerHTML = "<thead><tr><th>Área</th><th>Alertas</th><th>Estado</th></tr></thead>";
+  const tbody = document.createElement("tbody");
+  DATOS.semaforo.forEach(s => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${s.area}</td><td>${s.alertas}</td><td><span class="semaforo ${s.estado}"></span>${s.estado}</td>`;
+    tbody.appendChild(tr);
+  });
+  tabla.appendChild(tbody);
+  cont.appendChild(tabla);
+} else {
+  const div = document.createElement("div");
+  div.className = "empty-note";
+  div.textContent = DATOS.nota_semaforo || "Sin datos de plan todavía.";
+  cont.appendChild(div);
 }
 
+// ============================================================
+// SISTEMA DE RANGO GLOBAL -- un solo control mueve TODOS los
+// graficos temporales a la vez. Cada dataset tiene su propia
+// granularidad (dia / semana / mes), asi que "26 semanas" se
+// traduce distinto segun el grafico, pero siempre a la misma
+// ventana real de tiempo.
+// ============================================================
+const SEMANAS_POR_RANGO = { "1s": 1, "4s": 4, "8s": 8, "26s": 26, "52s": 52, "todo": null };
 
-def semaforo_semana(rows, plan):
-    if not plan:
-        return None, "Sin plan cargado."
+function recortar(arr, rango, granularidad) {
+  const semanas = SEMANAS_POR_RANGO[rango];
+  if (semanas === null) return arr;
+  if (granularidad === "semana") return arr.slice(-semanas);
+  if (granularidad === "dia") return arr.slice(-semanas * 7);
+  if (granularidad === "mes") return arr.slice(-Math.max(1, Math.ceil(semanas / 4.345)));
+  return arr;
+}
 
-    hoy = date.fromisoformat(rows[-1]["fecha"])
-    fechas_plan = sorted(p["fecha"] for p in plan)
-    if hoy < fechas_plan[0]:
-        return [], f"El plan todavía no empieza (arranca {fechas_plan[0]})."
+const graficos = {}; // nombre -> instancia Chart, para poder destruir/recrear
 
-    # ultima semana lunes-domingo ya completa dentro del rango del plan
-    year, week, _ = hoy.isocalendar()
-    lunes_actual = date.fromisocalendar(year, week, 1)
-    fin_semana_revisar = lunes_actual - timedelta(days=1)  # domingo pasado
-    inicio_semana_revisar = fin_semana_revisar - timedelta(days=6)
+function construirHrv(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[
+    { label:'HRV (ms)', data: datos.map(m=>m.hrv), borderColor:'#5a9aa0', backgroundColor:'transparent', tension:0.3, borderWidth:2 },
+    { label:'FC reposo (lpm)', data: datos.map(m=>m.fc), borderColor:'#b1573f', backgroundColor:'transparent', tension:0.3, borderWidth:2, yAxisID:'y1' }
+  ]},
+  options:{ plugins:{
+      legend:{labels:{color:fontColor,font:{size:11}}},
+      tooltip:{ callbacks:{ afterLabel: (ctx) => {
+        const m = datos[ctx.dataIndex];
+        return ctx.datasetIndex === 0 ? `(${m.n_hrv} noches con dato)` : `(${m.n_fc} noches con dato)`;
+      }}}
+    },
+    scales:{ x:{ticks:{color:fontColor},grid:{color:gridColor}}, y:{ticks:{color:fontColor},grid:{color:gridColor}}, y1:{ticks:{color:fontColor},grid:{display:false},position:'right'} } }
+};}
 
-    historial_por_fecha = {r["fecha"]: r for r in rows}
-    resultados = {}
-    d = inicio_semana_revisar
-    while d <= fin_semana_revisar:
-        fila_plan = next((p for p in plan if p["fecha"] == d.isoformat()), None)
-        fila_real = historial_por_fecha.get(d.isoformat())
-        if fila_plan:
-            sesion = fila_plan.get("sesion", "")
-            area = AREA_POR_SESION.get(sesion)
-            if area:
-                resultados.setdefault(area, []).append((fila_plan, fila_real))
-        d += timedelta(days=1)
+function construirSleep(datos) { return {
+  type:'bar',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Horas de sueño', data: datos.map(m=>m.sueno), backgroundColor:'#d2a24c'}] },
+  options:{ plugins:{
+      legend:{display:false},
+      tooltip:{ callbacks:{ afterLabel: (ctx) => `(${datos[ctx.dataIndex].n_sueno} noches con dato)` }}
+    },
+    scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:9} } }
+};}
 
-    semaforo = []
-    for area, pares in resultados.items():
-        alertas = 0
-        for fila_plan, fila_real in pares:
-            hecho = fila_real and fila_real.get("actividad_tipo")
-            if not hecho:
-                alertas += 1
-        estado = "verde" if alertas == 0 else ("amarillo" if alertas == 1 else "rojo")
-        semaforo.append({"area": area, "estado": estado, "alertas": alertas})
+function construirPMC(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(p=>p.fecha.slice(5)), datasets:[
+    { label:'CTL (fondo)', data: datos.map(p=>p.ctl), borderColor:'#5a9aa0', backgroundColor:'transparent', borderWidth:2, pointRadius:0 },
+    { label:'ATL (fatiga)', data: datos.map(p=>p.atl), borderColor:'#b1573f', backgroundColor:'transparent', borderWidth:2, pointRadius:0 },
+    { label:'TSB (forma)', data: datos.map(p=>p.tsb), borderColor:'#d2a24c', backgroundColor:'transparent', borderWidth:2, pointRadius:0, borderDash:[4,3] }
+  ]},
+  options:{ plugins:{legend:{labels:{color:fontColor,font:{size:11}}}},
+    scales:{ x:{ticks:{color:fontColor,maxTicksLimit:12,font:{size:9}},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}} } }
+};}
 
-    return semaforo, f"Semana revisada: {inicio_semana_revisar} a {fin_semana_revisar}"
+function construirCarga(datos) { return {
+  type:'bar',
+  data:{ labels: datos.map(s=>s.semana.slice(5)), datasets:[
+    {label:'Correr/trail', data: datos.map(s=>s.correr), backgroundColor:'#7ba17e'},
+    {label:'Bici', data: datos.map(s=>s.bici), backgroundColor:'#5a9aa0'},
+    {label:'Fuerza', data: datos.map(s=>s.fuerza), backgroundColor:'#d2a24c'}
+  ]},
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor,font:{size:10.5}},grid:{display:false},stacked:true}, y:{ticks:{color:fontColor},grid:{color:gridColor},stacked:true,title:{display:true,text:'minutos',color:fontColor,font:{size:11}}} } }
+};}
 
+function construirAltitud(datos) { return {
+  type:'bar',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{data: datos.map(m=>m.pct), backgroundColor:'#5a9aa0'}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor,callback:v=>v+'%'},grid:{color:gridColor},suggestedMax:100} } }
+};}
 
-def generar_html(datos):
-    with open(__file__.replace("generar_dashboard.py", "dashboard_template.html"), encoding="utf-8") as fh:
-        plantilla = fh.read()
-    return plantilla.replace("__DATOS_JSON__", json.dumps(datos, ensure_ascii=False))
+function construirSpo2(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'SpO2 (%)', data: datos.map(m=>m.spo2), borderColor:'#5a9aa0', backgroundColor:'rgba(90,154,160,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
+  options:{ plugins:{legend:{display:false},
+      tooltip:{ callbacks:{ afterLabel: (ctx) => `(${datos[ctx.dataIndex].n_spo2} noches con dato)` }}},
+    scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMin:88,suggestedMax:100} } }
+};}
 
+function construirBB(datos) { return {
+  type:'bar',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Body Battery mín', data: datos.map(m=>m.bb_min), backgroundColor:'#7ba17e'}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:100} } }
+};}
 
-def main():
-    ruta_historial = sys.argv[1]
-    ruta_plan = sys.argv[2] if len(sys.argv) > 2 else None
+function construirEstres(datos) { return {
+  type:'bar',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Estrés promedio', data: datos.map(m=>m.estres), backgroundColor:'#b1573f'}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:60} } }
+};}
 
-    rows = cargar_historial(ruta_historial)
-    plan = cargar_plan(ruta_plan)
+function construirPuntajeSueno(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Puntaje de sueño', data: datos.map(m=>m.puntaje_sueno), borderColor:'#d2a24c', backgroundColor:'rgba(210,162,76,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:100} } }
+};}
 
-    semaforo, nota_semaforo = semaforo_semana(rows, plan)
+function construirDinamica(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[
+    { label:'Cadencia (pasos/min)', data: datos.map(m=>m.cadencia), borderColor:'#5a9aa0', backgroundColor:'transparent', tension:0.3, borderWidth:2 },
+    { label:'Zancada (cm)', data: datos.map(m=>m.zancada), borderColor:'#d2a24c', backgroundColor:'transparent', tension:0.3, borderWidth:2, yAxisID:'y1' }
+  ]},
+  options:{ plugins:{legend:{labels:{color:fontColor,font:{size:11}}}},
+    scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}}, y1:{ticks:{color:fontColor},grid:{display:false},position:'right'} } }
+};}
 
-    pmc = ctl_atl_tsb(rows)
+function construirVo2(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'VO2 max', data: datos.map(m=>m.vo2max), borderColor:'#d2a24c', backgroundColor:'rgba(210,162,76,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}} } }
+};}
 
-    analisis_4sem = analisis_periodo(rows, 28, "Últimas 4 semanas")
-    analisis_6mes = analisis_periodo(rows, 182, "Últimos 6 meses")
-    nota_pmc = resumen_pmc_actual(pmc)
-    if nota_pmc:
-        analisis_4sem["frases"].append(nota_pmc)
+function construirEficiencia(datos) { return {
+  type:'line',
+  data:{ labels: datos.map(e=>nombreMes(e.mes)), datasets:[{label:'Eficiencia', data: datos.map(e=>e.ef), borderColor:'#7ba17e', backgroundColor:'rgba(123,161,126,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}} } }
+};}
 
-    datos = {
-        "generado": datetime.now().isoformat(timespec="minutes"),
-        "mensual": resumen_mensual(rows),
-        "dinamica": dinamica_carrera_mensual(rows),
-        "carga_semanal": carga_semanal_por_tipo(rows),
-        "cumplimiento": cumplimiento_semanal(rows),
-        "eficiencia": eficiencia_aerobica_mensual(rows),
-        "altitud": exposicion_altitud_mensual(rows),
-        "pmc": pmc,
-        "hoy": estado_del_dia(rows),
-        "semaforo": semaforo,
-        "nota_semaforo": nota_semaforo,
-        "analisis": [analisis_4sem, analisis_6mes],
-    }
+function construirCumplimiento(datos) { return {
+  type:'bar',
+  data:{ labels: datos.map(s=>s.semana.slice(5)), datasets:[{data: datos.map(s=>s.n), backgroundColor: datos.map(s=>s.n>=4?'#7ba17e':'#2d413a')}] },
+  options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor,maxRotation:90,minRotation:90,font:{size:9}},grid:{display:false}}, y:{ticks:{color:fontColor,stepSize:1},grid:{color:gridColor},suggestedMax:6} } }
+};}
 
-    html = generar_html(datos)
-    with open("dashboard.html", "w", encoding="utf-8") as fh:
-        fh.write(html)
-    print("dashboard.html generado.")
+const DEFINICIONES = [
+  { id:'chartHrv', datos: DATOS.mensual, granularidad:'mes', construir: construirHrv },
+  { id:'chartSleep', datos: DATOS.mensual, granularidad:'mes', construir: construirSleep },
+  { id:'chartBB', datos: DATOS.mensual, granularidad:'mes', construir: construirBB },
+  { id:'chartEstres', datos: DATOS.mensual, granularidad:'mes', construir: construirEstres },
+  { id:'chartPuntajeSueno', datos: DATOS.mensual, granularidad:'mes', construir: construirPuntajeSueno },
+  { id:'chartDinamica', datos: DATOS.dinamica, granularidad:'mes', construir: construirDinamica },
+  { id:'chartSpo2', datos: DATOS.mensual, granularidad:'mes', construir: construirSpo2 },
+  { id:'chartVo2', datos: DATOS.mensual, granularidad:'mes', construir: construirVo2 },
+  { id:'chartPMC', datos: DATOS.pmc, granularidad:'dia', construir: construirPMC },
+  { id:'chartCarga', datos: DATOS.carga_semanal, granularidad:'semana', construir: construirCarga },
+  { id:'chartAltitud', datos: DATOS.altitud, granularidad:'mes', construir: construirAltitud },
+  { id:'chartEficiencia', datos: DATOS.eficiencia, granularidad:'mes', construir: construirEficiencia },
+  { id:'chartCumplimiento', datos: DATOS.cumplimiento, granularidad:'semana', construir: construirCumplimiento },
+];
 
+function renderizarTodo(rango) {
+  DEFINICIONES.forEach(def => {
+    const datosRecortados = recortar(def.datos, rango, def.granularidad);
+    if (graficos[def.id]) graficos[def.id].destroy();
+    graficos[def.id] = new Chart(document.getElementById(def.id), def.construir(datosRecortados));
+  });
+}
 
-if __name__ == "__main__":
-    main()
+// --- Análisis automático ---
+const analisisCont = document.getElementById("analisisContenido");
+(DATOS.analisis || []).forEach(bloque => {
+  const div = document.createElement("div");
+  div.className = "card";
+  const lista = bloque.frases.map(f => `<li>${f}</li>`).join("");
+  div.innerHTML = `<h3 style="margin-top:0;font-size:15px;color:var(--text);">${bloque.titulo}</h3><ul style="margin:0;padding-left:18px;color:var(--text-dim);font-size:14px;line-height:1.7;">${lista}</ul>`;
+  analisisCont.appendChild(div);
+});
+
+renderizarTodo('8s');
+
+document.querySelectorAll('.rango-global button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.rango-global button').forEach(b => b.classList.remove('activo'));
+    btn.classList.add('activo');
+    renderizarTodo(btn.dataset.rango);
+  });
+});
+</script>
+</body>
+</html>
