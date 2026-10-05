@@ -15,8 +15,19 @@ import json
 import statistics as st
 from datetime import date, timedelta, datetime
 from collections import defaultdict
+from zoneinfo import ZoneInfo
 
 FC_MAX_REFERENCIA = 181  # ajustar tras cada test de FC max; ver README
+Z2_MAX_PCT = 0.78         # tope de Z2 del plan (68-78% FC max)
+TZ = ZoneInfo("America/Guatemala")
+
+# Hitos del año (las carreras son tentativas: actualizar cuando salgan las fechas oficiales)
+HITOS = [
+    ("DEXA 1", "2026-10-19"), ("Test FC máx", "2026-11-25"), ("DEXA 2", "2026-11-30"),
+    ("DEXA 3", "2027-01-18"), ("Test FC máx", "2027-03-10"), ("DEXA 4", "2027-03-15"),
+    ("DEXA 5", "2027-04-19"), ("Ultra de los Dioses 42k (tentativa)", "2027-09-06"),
+    ("UTG 100k (tentativa)", "2027-11-19"),
+]
 
 PIE = {"running", "trail_running", "treadmill_running", "walking", "mountaineering", "other"}
 BICI = {"cycling", "indoor_cycling"}
@@ -334,47 +345,256 @@ AREA_POR_SESION = {
     "gym_A": "Gym",
     "gym_B": "Gym",
 }
+ORDEN_AREAS = ["Aeróbico", "Deriva del domingo", "Ruck", "Gym", "Recuperación"]
+DIAS_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+
+def hoy_local():
+    return datetime.now(TZ).date()
+
+
+def lunes_de(d):
+    return d - timedelta(days=d.weekday())
+
+
+def estado_por_alertas(n):
+    return "verde" if n == 0 else ("amarillo" if n == 1 else "rojo")
+
+
+def evaluar_sesion(p, r):
+    """Compara una sesión planeada contra lo registrado. Devuelve (alertas, detalle)."""
+    dia = f"{p.get('dia', '')} {p['fecha'][8:]}"
+    plan_min = f(p.get("duracion_plan_min"))
+    if not r or not r.get("actividad_tipo"):
+        return 1, f"{dia}: sin actividad registrada"
+    real = f(r.get("actividad_duracion_min")) or 0
+    alertas = 0
+    partes = [f"{round(real)}'" + (f" de {round(plan_min)}'" if plan_min else "")]
+    if plan_min and real < 0.8 * plan_min:
+        alertas += 1
+        partes.append("duración < 80% del plan")
+    ses = p.get("sesion")
+    fc = f(r.get("actividad_fc_promedio"))
+    if ses in ("trote_montana", "fondo_plano") and fc:
+        tope = round(FC_MAX_REFERENCIA * Z2_MAX_PCT)
+        if fc > tope + 2:
+            alertas += 1
+            partes.append(f"FC media {round(fc)} sobre Z2 (tope {tope})")
+        else:
+            partes.append(f"FC media {round(fc)} en Z2")
+    if ses == "fondo_plano":
+        der = f(r.get("actividad_deriva_fc_pct"))
+        if der is None:
+            partes.append("deriva sin dato")
+        elif der > 8:
+            alertas += 1
+            partes.append(f"deriva {der}% (> 8%)")
+        else:
+            partes.append(f"deriva {der}%" + (" (meta < 5%)" if der >= 5 else ""))
+    if ses == "ruck":
+        des = f(r.get("actividad_desnivel_positivo_m"))
+        mh = f(r.get("actividad_m_h_subida"))
+        if des:
+            partes.append(f"{round(des)} m+")
+        if mh:
+            partes.append(f"{round(mh)} m/h en subida")
+    return alertas, f"{dia}: " + ", ".join(partes)
+
+
+def evaluar_recuperacion(rows, inicio, fin):
+    def prom(filas, campo):
+        vals = [f(r.get(campo)) for r in filas if f(r.get(campo)) is not None]
+        return round(st.mean(vals), 1) if vals else None
+
+    semana = [r for r in rows if inicio <= date.fromisoformat(r["fecha"]) <= fin]
+    base = [r for r in rows if inicio - timedelta(days=28) <= date.fromisoformat(r["fecha"]) < inicio]
+    if not semana:
+        return None
+    alertas, det = 0, []
+    hrv, hrv_b = prom(semana, "hrv_promedio_ms"), prom(base, "hrv_promedio_ms")
+    if hrv is not None and hrv_b:
+        pct = round((hrv - hrv_b) / hrv_b * 100)
+        if pct < -10:
+            alertas += 1
+        det.append(f"HRV {hrv} ms ({pct:+d}% vs. 4 semanas previas)")
+    fc, fc_b = prom(semana, "fc_reposo"), prom(base, "fc_reposo")
+    if fc is not None and fc_b:
+        dif = round(fc - fc_b, 1)
+        if dif >= 5:
+            alertas += 1
+        det.append(f"FC reposo {fc} lpm ({dif:+} vs. 4 semanas previas)")
+    sueno = prom(semana, "sueno_horas")
+    if sueno is not None:
+        if sueno < 7:
+            alertas += 1
+        det.append(f"Sueño promedio {sueno} h (meta 7-7.5 h)")
+    return {"area": "Recuperación", "estado": estado_por_alertas(alertas), "alertas": alertas, "detalles": det}
+
+
+def evaluar_semana(rows, plan, inicio, fin, hasta):
+    """Evalúa la semana inicio..fin con los datos disponibles hasta 'hasta'."""
+    hist = {r["fecha"]: r for r in rows}
+    pp = {p["fecha"]: p for p in plan}
+    areas = defaultdict(lambda: {"alertas": 0, "detalles": [], "evaluadas": 0, "pendientes": 0})
+    d = inicio
+    while d <= fin:
+        p = pp.get(d.isoformat())
+        if p and AREA_POR_SESION.get(p.get("sesion")):
+            a = areas[AREA_POR_SESION[p["sesion"]]]
+            if d <= hasta:
+                n, txt = evaluar_sesion(p, hist.get(d.isoformat()))
+                a["alertas"] += n
+                a["detalles"].append(txt)
+                a["evaluadas"] += 1
+            else:
+                a["pendientes"] += 1
+        d += timedelta(days=1)
+    salida = []
+    for nombre in ORDEN_AREAS[:-1]:
+        if nombre not in areas:
+            continue
+        a = areas[nombre]
+        estado = estado_por_alertas(a["alertas"]) if a["evaluadas"] else "pendiente"
+        det = a["detalles"] + ([f"{a['pendientes']} sesión(es) por hacer"] if a["pendientes"] else [])
+        salida.append({"area": nombre, "estado": estado, "alertas": a["alertas"], "detalles": det})
+    rec = evaluar_recuperacion(rows, inicio, min(fin, hasta))
+    if rec:
+        salida.append(rec)
+    return salida
 
 
 def semaforo_semana(rows, plan):
+    """Última semana completa (lun-dom) con datos."""
     if not plan:
         return None, "Sin plan cargado."
-
-    hoy = date.fromisoformat(rows[-1]["fecha"])
+    ultimo = date.fromisoformat(rows[-1]["fecha"])
     fechas_plan = sorted(date.fromisoformat(p["fecha"]) for p in plan)
-    if hoy < fechas_plan[0]:
-        return [], f"El plan todavía no empieza (arranca {fechas_plan[0]})."
+    fin = ultimo if ultimo.weekday() == 6 else lunes_de(ultimo) - timedelta(days=1)
+    inicio = fin - timedelta(days=6)
+    if fin < fechas_plan[0]:
+        return [], f"El plan todavía no empieza (arranca {fechas_plan[0]}). El primer semáforo sale con la semana del {fechas_plan[0]}."
+    if inicio > fechas_plan[-1]:
+        return [], "El plan cargado ya terminó: subí el plan de la siguiente etapa."
+    return evaluar_semana(rows, plan, inicio, fin, fin), f"Semana revisada: {inicio} a {fin}"
 
-    # ultima semana lunes-domingo ya completa dentro del rango del plan
-    year, week, _ = hoy.isocalendar()
-    lunes_actual = date.fromisocalendar(year, week, 1)
-    fin_semana_revisar = lunes_actual - timedelta(days=1)  # domingo pasado
-    inicio_semana_revisar = fin_semana_revisar - timedelta(days=6)
 
-    historial_por_fecha = {r["fecha"]: r for r in rows}
-    resultados = {}
-    d = inicio_semana_revisar
-    while d <= fin_semana_revisar:
-        fila_plan = next((p for p in plan if p["fecha"] == d.isoformat()), None)
-        fila_real = historial_por_fecha.get(d.isoformat())
-        if fila_plan:
-            sesion = fila_plan.get("sesion", "")
-            area = AREA_POR_SESION.get(sesion)
-            if area:
-                resultados.setdefault(area, []).append((fila_plan, fila_real))
-        d += timedelta(days=1)
+def semaforo_en_curso(rows, plan):
+    """Semana actual, evaluada con los días que ya tienen datos."""
+    if not plan:
+        return None, ""
+    hoy = hoy_local()
+    ultimo = date.fromisoformat(rows[-1]["fecha"])
+    inicio = lunes_de(hoy)
+    fin = inicio + timedelta(days=6)
+    pp = {p["fecha"] for p in plan}
+    if not any((inicio + timedelta(days=i)).isoformat() in pp for i in range(7)):
+        return [], "Esta semana no tiene plan."
+    if ultimo < inicio:
+        return evaluar_semana(rows, plan, inicio, fin, ultimo), f"Semana {inicio} a {fin}: arrancó hoy, todavía no hay días con datos."
+    return evaluar_semana(rows, plan, inicio, fin, ultimo), f"Semana {inicio} a {fin}, con datos hasta {ultimo}."
 
-    semaforo = []
-    for area, pares in resultados.items():
-        alertas = 0
-        for fila_plan, fila_real in pares:
-            hecho = fila_real and fila_real.get("actividad_tipo")
-            if not hecho:
-                alertas += 1
-        estado = "verde" if alertas == 0 else ("amarillo" if alertas == 1 else "rojo")
-        semaforo.append({"area": area, "estado": estado, "alertas": alertas})
 
-    return semaforo, f"Semana revisada: {inicio_semana_revisar} a {fin_semana_revisar}"
+def parse_gym(texto):
+    """gym_detalle: ejercicios separados por ' || ', campos por ' | '."""
+    filas = []
+    for item in (texto or "").split(" || "):
+        if not item.strip():
+            continue
+        partes = [x.strip() for x in item.split(" | ")]
+        partes += [""] * (4 - len(partes))
+        filas.append({"ejercicio": partes[0], "series": partes[1], "carga": partes[2], "clave": partes[3]})
+    return filas
+
+
+def fila_publica(p):
+    if not p:
+        return None
+    campos = ["fecha", "semana", "bloque", "dia", "sesion", "duracion_plan_min", "intensidad",
+              "estructura", "metrica_clave", "meta", "plios", "km_plan"]
+    d = {k: p.get(k, "") for k in campos}
+    d["gym"] = parse_gym(p.get("gym_detalle", ""))
+    return d
+
+
+def entreno_del_dia(rows, plan):
+    if not plan:
+        return None
+    hoy = hoy_local()
+    pp = {p["fecha"]: p for p in plan}
+    hist = {r["fecha"]: r for r in rows}
+    lunes = lunes_de(hoy)
+    semana = []
+    for i in range(7):
+        d = lunes + timedelta(days=i)
+        p = pp.get(d.isoformat())
+        if not p:
+            continue
+        r = hist.get(d.isoformat())
+        entrena = bool(AREA_POR_SESION.get(p.get("sesion"))) or p.get("sesion") == "test_fc_max"
+        if d == hoy:
+            estado = "hoy"
+        elif d > hoy:
+            estado = "futuro"
+        elif not entrena:
+            estado = "libre"
+        elif r and r.get("actividad_tipo"):
+            estado = "hecho"
+        elif r is None:
+            estado = "sin_dato"
+        else:
+            estado = "no_hecho"
+        semana.append({"fecha": d.isoformat(), "dia": DIAS_ES[i], "sesion": p.get("sesion", ""),
+                       "duracion": p.get("duracion_plan_min", ""), "estado": estado,
+                       "real_min": f(r.get("actividad_duracion_min")) if r else None})
+    fechas = sorted(pp)
+    return {
+        "fecha": hoy.isoformat(),
+        "dia": DIAS_ES[hoy.weekday()],
+        "hoy": fila_publica(pp.get(hoy.isoformat())),
+        "manana": fila_publica(pp.get((hoy + timedelta(days=1)).isoformat())),
+        "semana": semana,
+        "inicio_plan": fechas[0],
+        "fin_plan": fechas[-1],
+    }
+
+
+def contexto_plan(plan):
+    hoy = hoy_local()
+    fase = None
+    if plan:
+        p = next((x for x in plan if x["fecha"] == hoy.isoformat()), None)
+        if p:
+            fase = f"Semana {p.get('semana')} · {p.get('bloque')}"
+        elif hoy.isoformat() < min(x["fecha"] for x in plan):
+            fase = "Antes del inicio del plan"
+        else:
+            fase = "Plan terminado: subir el de la siguiente etapa"
+    proximos = []
+    for nombre, fecha in HITOS:
+        dfe = date.fromisoformat(fecha)
+        if dfe >= hoy:
+            proximos.append({"nombre": nombre, "fecha": fecha, "dias": (dfe - hoy).days})
+    return {"fase": fase, "proximos": proximos[:5], "fc_max": FC_MAX_REFERENCIA,
+            "z2": [round(FC_MAX_REFERENCIA * 0.68), round(FC_MAX_REFERENCIA * Z2_MAX_PCT)]}
+
+
+def km_plan_vs_real(rows, plan):
+    if not plan:
+        return []
+    ultimo = date.fromisoformat(rows[-1]["fecha"])
+    plan_sem = defaultdict(float)
+    for p in plan:
+        k = f(p.get("km_plan"))
+        plan_sem[lunes_de(date.fromisoformat(p["fecha"])).isoformat()] += k or 0
+    real_sem = defaultdict(float)
+    for r in rows:
+        if r.get("actividad_tipo") in PIE or r.get("actividad_tipo") == "hiking":
+            real_sem[lunes_de(date.fromisoformat(r["fecha"])).isoformat()] += f(r.get("actividad_distancia_km")) or 0
+    salida = []
+    for s in sorted(plan_sem):
+        real = round(real_sem.get(s, 0), 1) if date.fromisoformat(s) <= ultimo else None
+        salida.append({"semana": s, "plan": round(plan_sem[s], 1), "real": real})
+    return salida
 
 
 def generar_html(datos):
@@ -391,6 +611,7 @@ def main():
     plan = cargar_plan(ruta_plan)
 
     semaforo, nota_semaforo = semaforo_semana(rows, plan)
+    semaforo_actual, nota_semaforo_actual = semaforo_en_curso(rows, plan)
 
     pmc = ctl_atl_tsb(rows)
 
@@ -412,6 +633,11 @@ def main():
         "hoy": estado_del_dia(rows),
         "semaforo": semaforo,
         "nota_semaforo": nota_semaforo,
+        "semaforo_actual": semaforo_actual,
+        "nota_semaforo_actual": nota_semaforo_actual,
+        "entreno": entreno_del_dia(rows, plan),
+        "contexto": contexto_plan(plan),
+        "km_plan_real": km_plan_vs_real(rows, plan),
         "analisis": [analisis_4sem, analisis_6mes],
     }
 
