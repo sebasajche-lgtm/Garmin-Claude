@@ -7,23 +7,24 @@
 <script src="chart.umd.js"></script>
 <style>
   :root{
-    --bg:#131c1a; --panel:#1b2723; --panel-2:#22322c; --line:#2d413a;
-    --text:#eae7de; --text-dim:#96a89f;
-    --sage:#7ba17e; --ochre:#d2a24c; --rust:#b1573f; --teal:#5a9aa0;
+    --bg:#f6f7f9; --panel:#ffffff; --panel-2:#f0f2f5; --line:#dfe3e8;
+    --text:#1c2430; --text-dim:#5b6675;
+    --accent:#2563eb; --ok:#1f9d55; --ochre:#d97706; --rust:#dc2626; --teal:#0891b2;
     --mono: ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
     --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .card,.hero,.hoy-card,.dia{box-shadow:0 1px 2px rgba(16,24,40,0.05);}
   .wrap{max-width:1180px;margin:0 auto;padding:32px 20px 80px;}
   header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:36px;}
   header.top h1{font-size:26px;margin:0 0 6px;font-weight:600;letter-spacing:-0.01em;}
   header.top p{margin:0;color:var(--text-dim);font-size:14px;}
-  .goal-tag{font-family:var(--mono);font-size:12.5px;color:var(--sage);background:rgba(122,161,126,0.1);border:1px solid rgba(122,161,126,0.3);padding:6px 12px;border-radius:6px;white-space:nowrap;}
+  .goal-tag{font-family:var(--mono);font-size:12.5px;color:var(--accent);background:rgba(37,99,235,0.1);border:1px solid rgba(37,99,235,0.3);padding:6px 12px;border-radius:6px;white-space:nowrap;}
   .hero{display:grid;grid-template-columns:200px 1fr;gap:28px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px;margin-bottom:44px;}
   @media (max-width:640px){.hero{grid-template-columns:1fr;}}
   .ring{width:160px;height:160px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;flex-direction:column;border:3px solid var(--rust);}
-  .ring.verde{border-color:var(--sage);}
+  .ring.verde{border-color:var(--ok);}
   .ring.amarillo{border-color:var(--ochre);}
   .ring .estado{font-size:15px;font-weight:600;letter-spacing:0.02em;}
   .ring .fc{font-family:var(--mono);font-size:26px;font-weight:600;margin-top:4px;}
@@ -32,7 +33,7 @@
   .criterios h3{margin:0 0 4px;font-size:13px;color:var(--text-dim);font-weight:500;}
   .criterio-row{display:flex;justify-content:space-between;align-items:center;font-size:14.5px;padding:9px 12px;border-radius:7px;background:var(--panel-2);margin-bottom:8px;}
   .criterio-row .marca{font-family:var(--mono);font-size:13px;}
-  .marca.alerta{color:var(--rust);} .marca.ok{color:var(--sage);}
+  .marca.alerta{color:var(--rust);} .marca.ok{color:var(--ok);}
   section{margin-bottom:48px;}
   h2{font-size:17px;font-weight:600;margin:0 0 6px;}
   .subtext{color:var(--text-dim);font-size:13.5px;margin:0 0 20px;max-width:600px;}
@@ -46,7 +47,7 @@
   table.plan td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top;}
   table.plan tr:last-child td{border-bottom:none;}
   .semaforo{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;position:relative;top:-1px;}
-  .semaforo.verde{background:var(--sage);} .semaforo.amarillo{background:var(--ochre);} .semaforo.rojo{background:var(--rust);}
+  .semaforo.verde{background:var(--ok);} .semaforo.amarillo{background:var(--ochre);} .semaforo.rojo{background:var(--rust);}
   .legend{display:flex;gap:18px;font-size:12.5px;color:var(--text-dim);margin-top:14px;flex-wrap:wrap;}
   .legend span{display:inline-flex;align-items:center;gap:6px;}
   .dot{width:9px;height:9px;border-radius:2px;display:inline-block;}
@@ -60,16 +61,16 @@
     font-family:var(--sans);font-size:12.5px;color:var(--text-dim);background:var(--panel-2);
     border:1px solid var(--line);border-radius:6px;padding:5px 12px;cursor:pointer;
   }
-  .rango-global button.activo{color:var(--sage);border-color:var(--sage);background:rgba(122,161,126,0.1);}
+  .rango-global button.activo{color:var(--accent);border-color:var(--accent);background:rgba(37,99,235,0.1);}
 
   .tabs{display:flex;gap:8px;margin:-12px 0 28px;border-bottom:1px solid var(--line);}
   .tabs button{font-family:var(--sans);font-size:14px;color:var(--text-dim);background:none;border:none;border-bottom:2px solid transparent;padding:10px 14px;cursor:pointer;}
-  .tabs button.activo{color:var(--text);border-bottom-color:var(--sage);}
+  .tabs button.activo{color:var(--text);border-bottom-color:var(--accent);}
   .contexto{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:28px;}
   .chip{font-size:12.5px;padding:5px 11px;border-radius:999px;background:var(--panel);border:1px solid var(--line);color:var(--text-dim);}
   .chip b{color:var(--text);font-weight:600;}
-  .chip.fase{color:var(--sage);border-color:rgba(122,161,126,0.4);background:rgba(122,161,126,0.08);}
-  .hoy-card{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--sage);border-radius:12px;padding:22px;}
+  .chip.fase{color:var(--accent);border-color:rgba(37,99,235,0.4);background:rgba(37,99,235,0.08);}
+  .hoy-card{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:22px;}
   .hoy-card h3{margin:0 0 4px;font-size:22px;font-weight:600;}
   .hoy-meta{font-family:var(--mono);font-size:12.5px;color:var(--text-dim);margin-bottom:14px;}
   .hoy-estructura{font-size:15px;line-height:1.6;margin:0 0 12px;}
@@ -83,8 +84,8 @@
   .dia .d{font-family:var(--mono);color:var(--text-dim);font-size:11.5px;}
   .dia .s{font-weight:500;margin:4px 0 2px;}
   .dia .e{font-size:11.5px;}
-  .dia.hoy{border-color:var(--sage);background:rgba(122,161,126,0.08);}
-  .e.hecho{color:var(--sage);} .e.no_hecho{color:var(--rust);} .e.sin_dato,.e.futuro,.e.libre{color:var(--text-dim);} .e.hoy{color:var(--ochre);}
+  .dia.hoy{border-color:var(--accent);background:rgba(37,99,235,0.08);}
+  .e.hecho{color:var(--ok);} .e.no_hecho{color:var(--rust);} .e.sin_dato,.e.futuro,.e.libre{color:var(--text-dim);} .e.hoy{color:var(--ochre);}
   .det{margin:4px 0 0;padding-left:18px;color:var(--text-dim);font-size:12.5px;line-height:1.6;}
   .semaforo.pendiente{background:var(--line);}
   footer{color:var(--text-dim);font-size:12px;margin-top:56px;border-top:1px solid var(--line);padding-top:16px;}
@@ -133,13 +134,13 @@
     </section>
 
     <section>
-      <h2>Semáforo — semana en curso</h2>
+      <h2 id="tituloSemActual">Semáforo — semana en curso</h2>
       <p class="subtext" id="notaSemaforoActual"></p>
       <div id="semaforoActual"></div>
     </section>
 
     <section>
-      <h2>Semáforo — semana anterior</h2>
+      <h2 id="tituloSemAnterior">Semáforo — semana anterior</h2>
       <p class="subtext" id="notaSemaforo"></p>
       <div id="semaforoContenido"></div>
       <p class="subtext" style="margin-top:12px">Verde = dentro de meta; amarillo = una alerta; rojo = dos o más. Se evalúa: que la sesión exista, duración ≥ 80% del plan, FC media dentro de Z2 en trotes y fondo, deriva del domingo ≤ 8% (meta &lt; 5%), y recuperación (HRV, FC en reposo y sueño contra tus 4 semanas previas). La deriva compara la primera y la última vuelta del reloj: en el run-walk, terminar trotando para que la última vuelta sea comparable.</p>
@@ -184,9 +185,9 @@
     <div class="card chart-card">
       <canvas id="chartCarga" height="200"></canvas>
       <div class="legend">
-        <span><span class="dot" style="background:#7ba17e"></span>Correr / trail</span>
-        <span><span class="dot" style="background:#5a9aa0"></span>Bici</span>
-        <span><span class="dot" style="background:#d2a24c"></span>Fuerza</span>
+        <span><span class="dot" style="background:#2563eb"></span>Correr / trail</span>
+        <span><span class="dot" style="background:#0891b2"></span>Bici</span>
+        <span><span class="dot" style="background:#d97706"></span>Fuerza</span>
       </div>
     </div>
   </section>
@@ -256,8 +257,8 @@
 
 <script>
 const DATOS = __DATOS_JSON__;
-const fontColor = "#96a89f";
-const gridColor = "rgba(255,255,255,0.06)";
+const fontColor = "#5b6675";
+const gridColor = "rgba(0,0,0,0.07)";
 const nombresMeses = {"01":"Ene","02":"Feb","03":"Mar","04":"Abr","05":"May","06":"Jun","07":"Jul","08":"Ago","09":"Sep","10":"Oct","11":"Nov","12":"Dic"};
 const nombreMes = (m) => nombresMeses[m.slice(5,7)] + "'" + m.slice(2,4);
 
@@ -295,22 +296,32 @@ function renderSemaforo(lista, nota, contId, notaId) {
 renderSemaforo(DATOS.semaforo_actual, DATOS.nota_semaforo_actual, "semaforoActual", "notaSemaforoActual");
 renderSemaforo(DATOS.semaforo, DATOS.nota_semaforo, "semaforoContenido", "notaSemaforo");
 
-// --- Contexto: fase y próximos hitos ---
+// --- Fecha de HOY según el dispositivo (no según cuándo se generó el archivo) ---
 const NOMBRE_SESION = {gym_A:"Gym A", gym_B:"Gym B", trote_montana:"Trote montaña", fondo_plano:"Fondo plano",
   ruck:"Ruck", test_fc_max:"Test FC máx", libre:"Libre", "dexa+libre":"DEXA + libre", buffer:"Buffer (finca)",
   viaje:"Viaje", boda:"Boda"};
+const DIAS_ES = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const sumarDias = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const ahora = new Date();
+const HOY = iso(ahora);
+const ent = DATOS.entreno;
+const porFecha = {};
+((ent && ent.ventana) || []).forEach(v => porFecha[v.fecha] = v);
+const filaHoy = porFecha[HOY];
+
+// --- Contexto: fase y próximos hitos ---
 const ctx = DATOS.contexto || {};
-const contexto = document.getElementById("contexto");
 let chips = "";
-if (ctx.fase) chips += `<span class="chip fase">${ctx.fase}</span>`;
+if (filaHoy) chips += `<span class="chip fase">Semana ${filaHoy.semana} · ${filaHoy.bloque}</span>`;
 if (ctx.z2) chips += `<span class="chip">Z2: <b>${ctx.z2[0]}-${ctx.z2[1]} lpm</b> (FC máx ${ctx.fc_max})</span>`;
-(ctx.proximos || []).forEach(h => {
-  chips += `<span class="chip">${h.nombre}: <b>${h.dias === 0 ? "hoy" : h.dias + " días"}</b></span>`;
-});
-contexto.innerHTML = chips;
+const hoy0 = new Date(HOY + "T00:00:00");
+(ctx.hitos || []).map(h => ({...h, dias: Math.round((new Date(h.fecha + "T00:00:00") - hoy0) / 86400000)}))
+  .filter(h => h.dias >= 0).slice(0, 5)
+  .forEach(h => { chips += `<span class="chip">${h.nombre}: <b>${h.dias === 0 ? "hoy" : h.dias + " días"}</b></span>`; });
+document.getElementById("contexto").innerHTML = chips;
 
 // --- Entreno de hoy ---
-const ent = DATOS.entreno;
 const contHoy = document.getElementById("entrenoHoy");
 function tablaGym(gym) {
   if (!gym || !gym.length) return "";
@@ -319,37 +330,54 @@ function tablaGym(gym) {
 }
 if (!ent) {
   contHoy.innerHTML = `<div class="empty-note">Sin plan cargado.</div>`;
-} else if (!ent.hoy) {
-  const msg = ent.fecha < ent.inicio_plan ? `El plan arranca el ${ent.inicio_plan}.` : `El plan cargado terminó el ${ent.fin_plan}: subí el de la siguiente etapa.`;
+} else if (!filaHoy) {
+  let msg;
+  if (HOY < ent.inicio_plan) msg = `El plan arranca el ${ent.inicio_plan}.`;
+  else if (HOY > ent.fin_plan) msg = `El plan cargado terminó el ${ent.fin_plan}: subí el de la siguiente etapa.`;
+  else msg = `El dashboard está desactualizado (último dato: ${ent.ultimo_dato}). Revisá que el workflow esté corriendo.`;
   contHoy.innerHTML = `<div class="empty-note">${msg}</div>`;
 } else {
-  const h = ent.hoy;
-  const nombre = NOMBRE_SESION[h.sesion] || h.sesion;
-  const meta = [h.dia + " " + h.fecha, h.duracion_plan_min ? h.duracion_plan_min + " min" : null, h.km_plan ? "~" + h.km_plan + " km" : null, h.bloque].filter(Boolean).join(" · ");
-  let html = `<div class="hoy-card"><h3>${nombre}</h3><div class="hoy-meta">${meta}</div>`;
+  const h = filaHoy;
+  const meta = [h.dia + " " + h.fecha, h.duracion_plan_min ? h.duracion_plan_min + " min" : null, h.km_plan ? "~" + h.km_plan + " km" : null].filter(Boolean).join(" · ");
+  let html = `<div class="hoy-card"><h3>${NOMBRE_SESION[h.sesion] || h.sesion}</h3><div class="hoy-meta">${meta}</div>`;
   html += `<p class="hoy-estructura">${h.estructura || ""}</p>`;
   if (h.intensidad) html += `<p class="hoy-linea"><b>Intensidad:</b> ${h.intensidad}</p>`;
   if (h.plios) html += `<p class="hoy-linea"><b>Plios:</b> ${h.plios}</p>`;
   if (h.metrica_clave) html += `<p class="hoy-linea"><b>Qué se mide:</b> ${h.metrica_clave} — <b>meta:</b> ${h.meta}</p>`;
   html += tablaGym(h.gym);
-  if (ent.manana) {
-    const m = ent.manana;
-    html += `<div class="manana"><b>Mañana (${m.dia}):</b> ${NOMBRE_SESION[m.sesion] || m.sesion}${m.duracion_plan_min ? " · " + m.duracion_plan_min + " min" : ""}</div>`;
-  }
+  const m = porFecha[iso(sumarDias(hoy0, 1))];
+  if (m) html += `<div class="manana"><b>Mañana (${m.dia}):</b> ${NOMBRE_SESION[m.sesion] || m.sesion}${m.duracion_plan_min ? " · " + m.duracion_plan_min + " min" : ""}</div>`;
   contHoy.innerHTML = html + `</div>`;
 }
 
-// --- Tira de la semana ---
+// --- Tira de la semana (lunes a domingo de la fecha del dispositivo) ---
 const ICONO = {hecho:"✓ hecho", no_hecho:"✗ sin registro", sin_dato:"… sin datos aún", futuro:"pendiente", hoy:"● hoy", libre:"libre"};
+const lunes = sumarDias(hoy0, -((hoy0.getDay() + 6) % 7));
+const diasSemana = [...Array(7)].map((_, i) => porFecha[iso(sumarDias(lunes, i))]).filter(Boolean);
 const tira = document.getElementById("semanaTira");
-if (ent && ent.semana && ent.semana.length) {
-  tira.innerHTML = ent.semana.map(d => `<div class="dia ${d.estado === "hoy" ? "hoy" : ""}">
-    <div class="d">${d.dia} ${d.fecha.slice(8)}</div>
-    <div class="s">${NOMBRE_SESION[d.sesion] || d.sesion}</div>
-    <div class="d">${d.duracion ? d.duracion + "'" : ""}${d.real_min ? " · real " + Math.round(d.real_min) + "'" : ""}</div>
-    <div class="e ${d.estado}">${ICONO[d.estado] || ""}</div></div>`).join("");
+if (diasSemana.length) {
+  tira.innerHTML = diasSemana.map(d => {
+    let estado;
+    if (d.fecha === HOY) estado = "hoy";
+    else if (d.fecha > HOY) estado = "futuro";
+    else if (!d.entrena) estado = "libre";
+    else if (d.hecho) estado = "hecho";
+    else if (!d.con_dato) estado = "sin_dato";
+    else estado = "no_hecho";
+    return `<div class="dia ${estado === "hoy" ? "hoy" : ""}">
+      <div class="d">${d.dia} ${d.fecha.slice(8)}</div>
+      <div class="s">${NOMBRE_SESION[d.sesion] || d.sesion}</div>
+      <div class="d">${d.duracion_plan_min ? d.duracion_plan_min + "'" : ""}${d.real_min ? " · real " + Math.round(d.real_min) + "'" : ""}</div>
+      <div class="e ${estado}">${ICONO[estado]}</div></div>`;
+  }).join("");
 } else {
   tira.innerHTML = `<div class="empty-note" style="grid-column:1/-1">Sin plan para esta semana.</div>`;
+}
+
+// Si el archivo se generó la semana pasada (ej. abrirlo el lunes temprano), ajustar títulos
+if (DATOS.fin_semana_actual && HOY > DATOS.fin_semana_actual) {
+  document.getElementById("tituloSemActual").textContent = "Semáforo — semana pasada (aún sin los datos del domingo)";
+  document.getElementById("tituloSemAnterior").textContent = "Semáforo — hace dos semanas";
 }
 
 // --- Km plan vs real (pestaña Hoy, siempre visible) ---
@@ -358,8 +386,8 @@ if (km.length) {
   new Chart(document.getElementById("chartKm"), {
     type: "bar",
     data: { labels: km.map(k => k.semana.slice(5)), datasets: [
-      { label: "Plan", data: km.map(k => k.plan), backgroundColor: "#2d413a" },
-      { label: "Real", data: km.map(k => k.real), backgroundColor: "#7ba17e" } ] },
+      { label: "Plan", data: km.map(k => k.plan), backgroundColor: "#cbd5e1" },
+      { label: "Real", data: km.map(k => k.real), backgroundColor: "#2563eb" } ] },
     options: { plugins: { legend: { labels: { color: fontColor, font: { size: 11 } } } },
       scales: { x: { ticks: { color: fontColor, font: { size: 10 } }, grid: { display: false } },
                 y: { ticks: { color: fontColor }, grid: { color: gridColor }, title: { display: true, text: "km", color: fontColor } } } }
@@ -389,8 +417,8 @@ const graficos = {}; // nombre -> instancia Chart, para poder destruir/recrear
 function construirHrv(datos) { return {
   type:'line',
   data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[
-    { label:'HRV (ms)', data: datos.map(m=>m.hrv), borderColor:'#5a9aa0', backgroundColor:'transparent', tension:0.3, borderWidth:2 },
-    { label:'FC reposo (lpm)', data: datos.map(m=>m.fc), borderColor:'#b1573f', backgroundColor:'transparent', tension:0.3, borderWidth:2, yAxisID:'y1' }
+    { label:'HRV (ms)', data: datos.map(m=>m.hrv), borderColor:'#0891b2', backgroundColor:'transparent', tension:0.3, borderWidth:2 },
+    { label:'FC reposo (lpm)', data: datos.map(m=>m.fc), borderColor:'#dc2626', backgroundColor:'transparent', tension:0.3, borderWidth:2, yAxisID:'y1' }
   ]},
   options:{ plugins:{
       legend:{labels:{color:fontColor,font:{size:11}}},
@@ -404,7 +432,7 @@ function construirHrv(datos) { return {
 
 function construirSleep(datos) { return {
   type:'bar',
-  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Horas de sueño', data: datos.map(m=>m.sueno), backgroundColor:'#d2a24c'}] },
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Horas de sueño', data: datos.map(m=>m.sueno), backgroundColor:'#d97706'}] },
   options:{ plugins:{
       legend:{display:false},
       tooltip:{ callbacks:{ afterLabel: (ctx) => `(${datos[ctx.dataIndex].n_sueno} noches con dato)` }}
@@ -415,9 +443,9 @@ function construirSleep(datos) { return {
 function construirPMC(datos) { return {
   type:'line',
   data:{ labels: datos.map(p=>p.fecha.slice(5)), datasets:[
-    { label:'CTL (fondo)', data: datos.map(p=>p.ctl), borderColor:'#5a9aa0', backgroundColor:'transparent', borderWidth:2, pointRadius:0 },
-    { label:'ATL (fatiga)', data: datos.map(p=>p.atl), borderColor:'#b1573f', backgroundColor:'transparent', borderWidth:2, pointRadius:0 },
-    { label:'TSB (forma)', data: datos.map(p=>p.tsb), borderColor:'#d2a24c', backgroundColor:'transparent', borderWidth:2, pointRadius:0, borderDash:[4,3] }
+    { label:'CTL (fondo)', data: datos.map(p=>p.ctl), borderColor:'#0891b2', backgroundColor:'transparent', borderWidth:2, pointRadius:0 },
+    { label:'ATL (fatiga)', data: datos.map(p=>p.atl), borderColor:'#dc2626', backgroundColor:'transparent', borderWidth:2, pointRadius:0 },
+    { label:'TSB (forma)', data: datos.map(p=>p.tsb), borderColor:'#d97706', backgroundColor:'transparent', borderWidth:2, pointRadius:0, borderDash:[4,3] }
   ]},
   options:{ plugins:{legend:{labels:{color:fontColor,font:{size:11}}}},
     scales:{ x:{ticks:{color:fontColor,maxTicksLimit:12,font:{size:9}},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}} } }
@@ -426,22 +454,22 @@ function construirPMC(datos) { return {
 function construirCarga(datos) { return {
   type:'bar',
   data:{ labels: datos.map(s=>s.semana.slice(5)), datasets:[
-    {label:'Correr/trail', data: datos.map(s=>s.correr), backgroundColor:'#7ba17e'},
-    {label:'Bici', data: datos.map(s=>s.bici), backgroundColor:'#5a9aa0'},
-    {label:'Fuerza', data: datos.map(s=>s.fuerza), backgroundColor:'#d2a24c'}
+    {label:'Correr/trail', data: datos.map(s=>s.correr), backgroundColor:'#2563eb'},
+    {label:'Bici', data: datos.map(s=>s.bici), backgroundColor:'#0891b2'},
+    {label:'Fuerza', data: datos.map(s=>s.fuerza), backgroundColor:'#d97706'}
   ]},
   options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor,font:{size:10.5}},grid:{display:false},stacked:true}, y:{ticks:{color:fontColor},grid:{color:gridColor},stacked:true,title:{display:true,text:'minutos',color:fontColor,font:{size:11}}} } }
 };}
 
 function construirAltitud(datos) { return {
   type:'bar',
-  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{data: datos.map(m=>m.pct), backgroundColor:'#5a9aa0'}] },
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{data: datos.map(m=>m.pct), backgroundColor:'#0891b2'}] },
   options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor,callback:v=>v+'%'},grid:{color:gridColor},suggestedMax:100} } }
 };}
 
 function construirSpo2(datos) { return {
   type:'line',
-  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'SpO2 (%)', data: datos.map(m=>m.spo2), borderColor:'#5a9aa0', backgroundColor:'rgba(90,154,160,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'SpO2 (%)', data: datos.map(m=>m.spo2), borderColor:'#0891b2', backgroundColor:'rgba(8,145,178,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
   options:{ plugins:{legend:{display:false},
       tooltip:{ callbacks:{ afterLabel: (ctx) => `(${datos[ctx.dataIndex].n_spo2} noches con dato)` }}},
     scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMin:88,suggestedMax:100} } }
@@ -449,27 +477,27 @@ function construirSpo2(datos) { return {
 
 function construirBB(datos) { return {
   type:'bar',
-  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Body Battery mín', data: datos.map(m=>m.bb_min), backgroundColor:'#7ba17e'}] },
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Body Battery mín', data: datos.map(m=>m.bb_min), backgroundColor:'#2563eb'}] },
   options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:100} } }
 };}
 
 function construirEstres(datos) { return {
   type:'bar',
-  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Estrés promedio', data: datos.map(m=>m.estres), backgroundColor:'#b1573f'}] },
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Estrés promedio', data: datos.map(m=>m.estres), backgroundColor:'#dc2626'}] },
   options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:60} } }
 };}
 
 function construirPuntajeSueno(datos) { return {
   type:'line',
-  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Puntaje de sueño', data: datos.map(m=>m.puntaje_sueno), borderColor:'#d2a24c', backgroundColor:'rgba(210,162,76,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'Puntaje de sueño', data: datos.map(m=>m.puntaje_sueno), borderColor:'#d97706', backgroundColor:'rgba(217,119,6,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
   options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor},suggestedMax:100} } }
 };}
 
 function construirDinamica(datos) { return {
   type:'line',
   data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[
-    { label:'Cadencia (pasos/min)', data: datos.map(m=>m.cadencia), borderColor:'#5a9aa0', backgroundColor:'transparent', tension:0.3, borderWidth:2 },
-    { label:'Zancada (cm)', data: datos.map(m=>m.zancada), borderColor:'#d2a24c', backgroundColor:'transparent', tension:0.3, borderWidth:2, yAxisID:'y1' }
+    { label:'Cadencia (pasos/min)', data: datos.map(m=>m.cadencia), borderColor:'#0891b2', backgroundColor:'transparent', tension:0.3, borderWidth:2 },
+    { label:'Zancada (cm)', data: datos.map(m=>m.zancada), borderColor:'#d97706', backgroundColor:'transparent', tension:0.3, borderWidth:2, yAxisID:'y1' }
   ]},
   options:{ plugins:{legend:{labels:{color:fontColor,font:{size:11}}}},
     scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}}, y1:{ticks:{color:fontColor},grid:{display:false},position:'right'} } }
@@ -477,19 +505,19 @@ function construirDinamica(datos) { return {
 
 function construirVo2(datos) { return {
   type:'line',
-  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'VO2 max', data: datos.map(m=>m.vo2max), borderColor:'#d2a24c', backgroundColor:'rgba(210,162,76,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
+  data:{ labels: datos.map(m=>nombreMes(m.mes)), datasets:[{label:'VO2 max', data: datos.map(m=>m.vo2max), borderColor:'#d97706', backgroundColor:'rgba(217,119,6,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
   options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}} } }
 };}
 
 function construirEficiencia(datos) { return {
   type:'line',
-  data:{ labels: datos.map(e=>nombreMes(e.mes)), datasets:[{label:'Eficiencia', data: datos.map(e=>e.ef), borderColor:'#7ba17e', backgroundColor:'rgba(123,161,126,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
+  data:{ labels: datos.map(e=>nombreMes(e.mes)), datasets:[{label:'Eficiencia', data: datos.map(e=>e.ef), borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,0.1)', fill:true, tension:0.3, borderWidth:2, pointRadius:4}] },
   options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor},grid:{display:false}}, y:{ticks:{color:fontColor},grid:{color:gridColor}} } }
 };}
 
 function construirCumplimiento(datos) { return {
   type:'bar',
-  data:{ labels: datos.map(s=>s.semana.slice(5)), datasets:[{data: datos.map(s=>s.n), backgroundColor: datos.map(s=>s.n>=4?'#7ba17e':'#2d413a')}] },
+  data:{ labels: datos.map(s=>s.semana.slice(5)), datasets:[{data: datos.map(s=>s.n), backgroundColor: datos.map(s=>s.n>=4?'#2563eb':'#cbd5e1')}] },
   options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:fontColor,maxRotation:90,minRotation:90,font:{size:9}},grid:{display:false}}, y:{ticks:{color:fontColor,stepSize:1},grid:{color:gridColor},suggestedMax:6} } }
 };}
 
