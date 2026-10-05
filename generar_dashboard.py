@@ -341,7 +341,7 @@ def semaforo_semana(rows, plan):
         return None, "Sin plan cargado."
 
     hoy = date.fromisoformat(rows[-1]["fecha"])
-    fechas_plan = sorted(p["fecha"] for p in plan)
+    fechas_plan = sorted(date.fromisoformat(p["fecha"]) for p in plan)
     if hoy < fechas_plan[0]:
         return [], f"El plan todavía no empieza (arranca {fechas_plan[0]})."
 
