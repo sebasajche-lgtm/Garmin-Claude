@@ -54,7 +54,7 @@ jobs:
         run: python descargar_historial.py
 
       - name: Generar dashboard
-        run: python generar_dashboard.py garmin_historial_local.csv plan_oct-dic_2026_sesiones.csv
+        run: python generar_dashboard.py garmin_historial_local.csv plan.csv
 
       - name: Guardar dashboard.html en el repositorio (historial)
         run: |
