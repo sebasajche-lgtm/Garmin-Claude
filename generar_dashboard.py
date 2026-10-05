@@ -513,6 +513,10 @@ def fila_publica(p):
               "estructura", "metrica_clave", "meta", "plios", "km_plan"]
     d = {k: p.get(k, "") for k in campos}
     d["gym"] = parse_gym(p.get("gym_detalle", ""))
+    try:
+        d["detalle"] = json.loads(p.get("detalle_json") or "[]")
+    except ValueError:
+        d["detalle"] = []
     return d
 
 
@@ -540,8 +544,15 @@ def entreno_del_dia(rows, plan):
 
 
 def contexto_plan(plan):
-    return {"hitos": [{"nombre": n, "fecha": fe} for n, fe in HITOS], "fc_max": FC_MAX_REFERENCIA,
-            "z2": [round(FC_MAX_REFERENCIA * 0.68), round(FC_MAX_REFERENCIA * Z2_MAX_PCT)]}
+    fm = FC_MAX_REFERENCIA
+    z2 = [round(fm * 0.68), round(fm * Z2_MAX_PCT)]
+    zonas = {  # se reemplazan en el texto del plan: {Z1}, {Z2}, {Z3}, {Z2BICI}
+        "Z1": f"< {z2[0]} lpm",
+        "Z2": f"{z2[0]}-{z2[1]} lpm",
+        "Z3": f"{round(fm * 0.79)}-{round(fm * 0.87)} lpm",
+        "Z2BICI": f"hasta ~{z2[1] - 8} lpm",
+    }
+    return {"hitos": [{"nombre": n, "fecha": fe} for n, fe in HITOS], "fc_max": fm, "z2": z2, "zonas": zonas}
 
 
 def km_plan_vs_real(rows, plan):
