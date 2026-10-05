@@ -517,64 +517,30 @@ def fila_publica(p):
 
 
 def entreno_del_dia(rows, plan):
+    """Plan completo + estado de cada día. El navegador elige 'hoy' con la fecha
+    del dispositivo, así el entreno es correcto aunque el dashboard se haya
+    generado el día anterior (o el workflow haya fallado)."""
     if not plan:
         return None
-    hoy = hoy_local()
     pp = {p["fecha"]: p for p in plan}
     hist = {r["fecha"]: r for r in rows}
-    lunes = lunes_de(hoy)
-    semana = []
-    for i in range(7):
-        d = lunes + timedelta(days=i)
-        p = pp.get(d.isoformat())
-        if not p:
-            continue
-        r = hist.get(d.isoformat())
-        entrena = bool(AREA_POR_SESION.get(p.get("sesion"))) or p.get("sesion") == "test_fc_max"
-        if d == hoy:
-            estado = "hoy"
-        elif d > hoy:
-            estado = "futuro"
-        elif not entrena:
-            estado = "libre"
-        elif r and r.get("actividad_tipo"):
-            estado = "hecho"
-        elif r is None:
-            estado = "sin_dato"
-        else:
-            estado = "no_hecho"
-        semana.append({"fecha": d.isoformat(), "dia": DIAS_ES[i], "sesion": p.get("sesion", ""),
-                       "duracion": p.get("duracion_plan_min", ""), "estado": estado,
-                       "real_min": f(r.get("actividad_duracion_min")) if r else None})
+    ventana = []
+    for fecha in sorted(pp):
+        p = pp[fecha]
+        fila = fila_publica(p)
+        r = hist.get(fecha)
+        fila["entrena"] = bool(AREA_POR_SESION.get(p.get("sesion"))) or p.get("sesion") == "test_fc_max"
+        fila["con_dato"] = r is not None
+        fila["hecho"] = bool(r and r.get("actividad_tipo"))
+        fila["real_min"] = f(r.get("actividad_duracion_min")) if r else None
+        ventana.append(fila)
     fechas = sorted(pp)
-    return {
-        "fecha": hoy.isoformat(),
-        "dia": DIAS_ES[hoy.weekday()],
-        "hoy": fila_publica(pp.get(hoy.isoformat())),
-        "manana": fila_publica(pp.get((hoy + timedelta(days=1)).isoformat())),
-        "semana": semana,
-        "inicio_plan": fechas[0],
-        "fin_plan": fechas[-1],
-    }
+    return {"ventana": ventana, "inicio_plan": fechas[0], "fin_plan": fechas[-1],
+            "ultimo_dato": rows[-1]["fecha"]}
 
 
 def contexto_plan(plan):
-    hoy = hoy_local()
-    fase = None
-    if plan:
-        p = next((x for x in plan if x["fecha"] == hoy.isoformat()), None)
-        if p:
-            fase = f"Semana {p.get('semana')} · {p.get('bloque')}"
-        elif hoy.isoformat() < min(x["fecha"] for x in plan):
-            fase = "Antes del inicio del plan"
-        else:
-            fase = "Plan terminado: subir el de la siguiente etapa"
-    proximos = []
-    for nombre, fecha in HITOS:
-        dfe = date.fromisoformat(fecha)
-        if dfe >= hoy:
-            proximos.append({"nombre": nombre, "fecha": fecha, "dias": (dfe - hoy).days})
-    return {"fase": fase, "proximos": proximos[:5], "fc_max": FC_MAX_REFERENCIA,
+    return {"hitos": [{"nombre": n, "fecha": fe} for n, fe in HITOS], "fc_max": FC_MAX_REFERENCIA,
             "z2": [round(FC_MAX_REFERENCIA * 0.68), round(FC_MAX_REFERENCIA * Z2_MAX_PCT)]}
 
 
@@ -635,6 +601,7 @@ def main():
         "nota_semaforo": nota_semaforo,
         "semaforo_actual": semaforo_actual,
         "nota_semaforo_actual": nota_semaforo_actual,
+        "fin_semana_actual": (lunes_de(hoy_local()) + timedelta(days=6)).isoformat(),
         "entreno": entreno_del_dia(rows, plan),
         "contexto": contexto_plan(plan),
         "km_plan_real": km_plan_vs_real(rows, plan),
