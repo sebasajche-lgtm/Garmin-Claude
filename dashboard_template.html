@@ -85,7 +85,7 @@
   .dia .s{font-weight:500;margin:4px 0 2px;}
   .dia .e{font-size:11.5px;}
   .dia.hoy{border-color:var(--accent);background:rgba(37,99,235,0.08);}
-  .e.hecho{color:var(--ok);} .e.no_hecho{color:var(--rust);} .e.sin_dato,.e.futuro,.e.libre{color:var(--text-dim);} .e.hoy{color:var(--ochre);}
+  .e.hecho{color:var(--ok);} .e.no_hecho{color:var(--rust);} .e.sin_dato,.e.futuro,.e.libre,.e.opcional{color:var(--text-dim);} .e.hoy{color:var(--ochre);}
   tr.sec td{background:var(--panel-2);font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-dim);padding:6px 10px;}
   table.plan.entreno td:nth-child(2){white-space:nowrap;} table.plan.entreno td:nth-child(3){min-width:110px;}
   @media (max-width:640px){
@@ -313,7 +313,8 @@ renderSemaforo(DATOS.semaforo, DATOS.nota_semaforo, "semaforoContenido", "notaSe
 // --- Fecha de HOY según el dispositivo (no según cuándo se generó el archivo) ---
 const NOMBRE_SESION = {gym_A:"Gym A", gym_B:"Gym B", trote_montana:"Trote montaña", fondo_plano:"Fondo plano",
   ruck:"Ruck", test_fc_max:"Test FC máx", libre:"Libre", "dexa+libre":"DEXA + libre", buffer:"Buffer (finca)",
-  viaje:"Viaje", boda:"Boda"};
+  viaje:"Viaje", boda:"Boda", trote_z2:"Trote Z2", bici_z2:"Bici Z2", subida_casa:"Desnivel en casa",
+  fondo_opc:"Fondo (opcional)"};
 const DIAS_ES = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const sumarDias = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
@@ -356,7 +357,7 @@ if (!ent) {
   contHoy.innerHTML = `<div class="empty-note">${msg}</div>`;
 } else {
   const h = filaHoy;
-  const meta = [h.dia + " " + h.fecha, h.duracion_plan_min ? h.duracion_plan_min + " min" : null, h.km_plan ? "~" + h.km_plan + " km" : null, "Semana " + h.semana].filter(Boolean).join(" · ");
+  const meta = [h.dia + " " + h.fecha, h.duracion_plan_min ? h.duracion_plan_min + " min" : null, h.km_plan ? "~" + h.km_plan + " km" : null, h.pasos_meta ? "Meta " + Number(h.pasos_meta).toLocaleString("es-GT") + " pasos" : null, "Semana " + h.semana].filter(Boolean).join(" · ");
   let html = `<div class="hoy-card"><h3>${NOMBRE_SESION[h.sesion] || h.sesion}</h3><div class="hoy-meta">${meta}</div>`;
   if (h.detalle && h.detalle.length) {
     const filas = h.detalle.map(s => `<tr class="sec"><td colspan="4">${zonasTxt(s.sec)}</td></tr>` +
@@ -372,7 +373,7 @@ if (!ent) {
 }
 
 // --- Tira de la semana (lunes a domingo de la fecha del dispositivo) ---
-const ICONO = {hecho:"✓ hecho", no_hecho:"✗ sin registro", sin_dato:"… sin datos aún", futuro:"pendiente", hoy:"● hoy", libre:"libre"};
+const ICONO = {hecho:"✓ hecho", no_hecho:"✗ sin registro", sin_dato:"… sin datos aún", futuro:"pendiente", hoy:"● hoy", libre:"libre", opcional:"opcional"};
 const lunes = sumarDias(hoy0, -((hoy0.getDay() + 6) % 7));
 const diasSemana = [...Array(7)].map((_, i) => porFecha[iso(sumarDias(lunes, i))]).filter(Boolean);
 const tira = document.getElementById("semanaTira");
@@ -382,6 +383,7 @@ if (diasSemana.length) {
     if (d.fecha === HOY) estado = "hoy";
     else if (d.fecha > HOY) estado = "futuro";
     else if (!d.entrena) estado = "libre";
+    else if (!d.hecho && String(d.sesion).endsWith("_opc")) estado = "opcional";
     else if (d.hecho) estado = "hecho";
     else if (!d.con_dato) estado = "sin_dato";
     else estado = "no_hecho";
@@ -389,6 +391,7 @@ if (diasSemana.length) {
       <div class="d">${d.dia} ${d.fecha.slice(8)}</div>
       <div class="s">${NOMBRE_SESION[d.sesion] || d.sesion}</div>
       <div class="d">${d.duracion_plan_min ? d.duracion_plan_min + "'" : ""}${d.real_min ? " · real " + Math.round(d.real_min) + "'" : ""}</div>
+      <div class="d">${d.pasos_meta ? (d.pasos_real != null ? Math.round(d.pasos_real / 100) / 10 + "k / " : "") + Math.round(d.pasos_meta / 1000) + "k pasos" : ""}</div>
       <div class="e ${estado}">${ICONO[estado]}</div></div>`;
   }).join("");
 } else {

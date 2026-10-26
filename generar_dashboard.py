@@ -23,10 +23,10 @@ TZ = ZoneInfo("America/Guatemala")
 
 # Hitos del año (las carreras son tentativas: actualizar cuando salgan las fechas oficiales)
 HITOS = [
-    ("DEXA 1", "2026-10-19"), ("Test FC máx", "2026-11-25"), ("DEXA 2", "2026-11-30"),
-    ("DEXA 3", "2027-01-18"), ("Test FC máx", "2027-03-10"), ("DEXA 4", "2027-03-15"),
-    ("DEXA 5", "2027-04-19"), ("Ultra de los Dioses 42k (tentativa)", "2027-09-06"),
-    ("UTG 100k (tentativa)", "2027-11-19"),
+    ("DEXA 1 (sugerido, por agendar)", "2026-11-04"), ("Tests de fuerza", "2026-12-01"),
+    ("DEXA 2 (sugerido, por agendar)", "2026-12-04"), ("Tests de fuerza", "2027-02-02"),
+    ("DEXA 3 (sugerido, por agendar)", "2027-02-04"), ("Inicio Etapa 2", "2027-02-15"),
+    ("Ultra de los Dioses 42k (tentativa)", "2027-09-05"), ("UTG 100k", "2027-11-20"),
 ]
 
 PIE = {"running", "trail_running", "treadmill_running", "walking", "mountaineering", "other"}
@@ -340,12 +340,17 @@ def cargar_plan(ruta):
 
 AREA_POR_SESION = {
     "trote_montana": "Aeróbico",
+    "trote_z2": "Aeróbico",
+    "bici_z2": "Aeróbico",
     "fondo_plano": "Deriva del domingo",
+    "fondo_opc": "Fondo (opcional)",
     "ruck": "Ruck",
+    "subida_casa": "Desnivel",
     "gym_A": "Gym",
     "gym_B": "Gym",
 }
-ORDEN_AREAS = ["Aeróbico", "Deriva del domingo", "Ruck", "Gym", "Recuperación"]
+ORDEN_AREAS = ["Aeróbico", "Deriva del domingo", "Fondo (opcional)", "Ruck", "Desnivel", "Gym", "Recuperación"]
+SESIONES_Z2 = ("trote_montana", "fondo_plano", "trote_z2", "fondo_opc")
 DIAS_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 
 
@@ -366,6 +371,8 @@ def evaluar_sesion(p, r):
     dia = f"{p.get('dia', '')} {p['fecha'][8:]}"
     plan_min = f(p.get("duracion_plan_min"))
     if not r or not r.get("actividad_tipo"):
+        if str(p.get("sesion", "")).endswith("_opc"):
+            return 0, f"{dia}: opcional, no se hizo"
         return 1, f"{dia}: sin actividad registrada"
     real = f(r.get("actividad_duracion_min")) or 0
     alertas = 0
@@ -375,7 +382,12 @@ def evaluar_sesion(p, r):
         partes.append("duración < 80% del plan")
     ses = p.get("sesion")
     fc = f(r.get("actividad_fc_promedio"))
-    if ses in ("trote_montana", "fondo_plano") and fc:
+    if ses == "bici_z2" and fc:
+        tope = round(FC_MAX_REFERENCIA * Z2_MAX_PCT) - 8
+        if fc > tope + 2:
+            alertas += 1
+            partes.append(f"FC media {round(fc)} sobre Z2 de bici (tope {tope})")
+    if ses in SESIONES_Z2 and fc:
         tope = round(FC_MAX_REFERENCIA * Z2_MAX_PCT)
         if fc > tope + 2:
             alertas += 1
@@ -391,7 +403,7 @@ def evaluar_sesion(p, r):
             partes.append(f"deriva {der}% (> 8%)")
         else:
             partes.append(f"deriva {der}%" + (" (meta < 5%)" if der >= 5 else ""))
-    if ses == "ruck":
+    if ses in ("ruck", "subida_casa"):
         des = f(r.get("actividad_desnivel_positivo_m"))
         mh = f(r.get("actividad_m_h_subida"))
         if des:
@@ -431,6 +443,29 @@ def evaluar_recuperacion(rows, inicio, fin):
     return {"area": "Recuperación", "estado": estado_por_alertas(alertas), "alertas": alertas, "detalles": det}
 
 
+def evaluar_pasos(rows, plan, inicio, fin):
+    """Días con meta de pasos (columna pasos_meta del plan) cumplida en el rango."""
+    hist = {r["fecha"]: r for r in rows}
+    cumplidos, evaluados, suma = 0, 0, 0
+    d = inicio
+    while d <= fin:
+        p = next((x for x in plan if x["fecha"] == d.isoformat()), None)
+        r = hist.get(d.isoformat())
+        meta = f(p.get("pasos_meta")) if p else None
+        pasos = f(r.get("pasos")) if r else None
+        if meta and pasos is not None:
+            evaluados += 1
+            suma += pasos
+            cumplidos += pasos >= meta
+        d += timedelta(days=1)
+    if not evaluados:
+        return None
+    pct = cumplidos / evaluados
+    alertas = 0 if pct >= 0.7 else (1 if pct >= 0.5 else 2)
+    return {"area": "Pasos", "estado": estado_por_alertas(alertas), "alertas": alertas,
+            "detalles": [f"{cumplidos} de {evaluados} días con la meta", f"Promedio {round(suma / evaluados):,} pasos/día"]}
+
+
 def evaluar_semana(rows, plan, inicio, fin, hasta):
     """Evalúa la semana inicio..fin con los datos disponibles hasta 'hasta'."""
     hist = {r["fecha"]: r for r in rows}
@@ -457,6 +492,9 @@ def evaluar_semana(rows, plan, inicio, fin, hasta):
         estado = estado_por_alertas(a["alertas"]) if a["evaluadas"] else "pendiente"
         det = a["detalles"] + ([f"{a['pendientes']} sesión(es) por hacer"] if a["pendientes"] else [])
         salida.append({"area": nombre, "estado": estado, "alertas": a["alertas"], "detalles": det})
+    pas = evaluar_pasos(rows, plan, inicio, min(fin, hasta))
+    if pas:
+        salida.append(pas)
     rec = evaluar_recuperacion(rows, inicio, min(fin, hasta))
     if rec:
         salida.append(rec)
@@ -510,7 +548,7 @@ def fila_publica(p):
     if not p:
         return None
     campos = ["fecha", "semana", "bloque", "dia", "sesion", "duracion_plan_min", "intensidad",
-              "estructura", "metrica_clave", "meta", "plios", "km_plan"]
+              "estructura", "metrica_clave", "meta", "plios", "km_plan", "pasos_meta"]
     d = {k: p.get(k, "") for k in campos}
     d["gym"] = parse_gym(p.get("gym_detalle", ""))
     try:
@@ -537,6 +575,7 @@ def entreno_del_dia(rows, plan):
         fila["con_dato"] = r is not None
         fila["hecho"] = bool(r and r.get("actividad_tipo"))
         fila["real_min"] = f(r.get("actividad_duracion_min")) if r else None
+        fila["pasos_real"] = f(r.get("pasos")) if r else None
         ventana.append(fila)
     fechas = sorted(pp)
     return {"ventana": ventana, "inicio_plan": fechas[0], "fin_plan": fechas[-1],
