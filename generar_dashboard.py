@@ -23,7 +23,7 @@ TZ = ZoneInfo("America/Guatemala")
 
 # Hitos del año (las carreras son tentativas: actualizar cuando salgan las fechas oficiales)
 HITOS = [
-    ("DEXA 1 (sugerido, por agendar)", "2026-11-04"), ("Tests de fuerza", "2026-12-01"),
+    ("Tests de fuerza", "2026-12-01"),
     ("DEXA 2 (sugerido, por agendar)", "2026-12-04"), ("Tests de fuerza", "2027-02-02"),
     ("DEXA 3 (sugerido, por agendar)", "2027-02-04"), ("Inicio Etapa 2", "2027-02-15"),
     ("Ultra de los Dioses 42k (tentativa)", "2027-09-05"), ("UTG 100k", "2027-11-20"),
