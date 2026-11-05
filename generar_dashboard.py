@@ -23,7 +23,7 @@ TZ = ZoneInfo("America/Guatemala")
 
 # Hitos del año (las carreras son tentativas: actualizar cuando salgan las fechas oficiales)
 HITOS = [
-    ("Tests de fuerza", "2026-12-01"),
+    ("Ruta de referencia (ruck)", "2026-11-11"),
     ("Tests de fuerza", "2027-02-02"),
     ("Inicio Etapa 2", "2027-02-15"), ("DEXA 2 (junio, por agendar)", "2027-06-01"),
     ("Ultra de los Dioses 42k (tentativa)", "2027-09-05"), ("UTG 100k", "2027-11-20"),
@@ -342,6 +342,7 @@ AREA_POR_SESION = {
     "trote_montana": "Aeróbico",
     "trote_z2": "Aeróbico",
     "bici_z2": "Aeróbico",
+    "bici_int": "Aeróbico",
     "fondo_plano": "Deriva del domingo",
     "fondo_opc": "Fondo (opcional)",
     "ruck": "Ruck",
