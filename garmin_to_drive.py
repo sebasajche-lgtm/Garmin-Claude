@@ -366,6 +366,15 @@ def subir_csv(service, folder_id: str, file_id: str, filas: list):
         service.files().create(body=metadata, media_body=media, fields="id").execute()
 
 
+DIAS_REVISION = 7
+CAMPOS_CLAVE = ("pasos", "sueno_horas", "fc_reposo", "actividad_tipo")
+
+
+def tiene_datos(fila):
+    """True si la fila tiene al menos un dato real (pasos, sueño, FC en reposo o actividad)."""
+    return any(str(fila.get(c) or "").strip() not in ("", "0", "0.0") for c in CAMPOS_CLAVE)
+
+
 def main():
     if len(sys.argv) >= 3:
         fecha_inicio = date.fromisoformat(sys.argv[1])
@@ -373,7 +382,10 @@ def main():
     elif len(sys.argv) == 2:
         fecha_inicio = fecha_fin = date.fromisoformat(sys.argv[1])
     else:
-        fecha_inicio = fecha_fin = date.today() - timedelta(days=1)
+        # Por defecto vuelve a pedir los últimos 7 días: si el reloj sincronizó
+        # tarde, los días atrasados se completan solos en la siguiente corrida.
+        fecha_fin = date.today() - timedelta(days=1)
+        fecha_inicio = fecha_fin - timedelta(days=DIAS_REVISION - 1)
 
     print("Iniciando sesión en Garmin Connect...")
     email = os.environ["GARMIN_EMAIL"]
@@ -398,9 +410,18 @@ def main():
 
     filas = descargar_csv(service, file_id) if file_id else []
 
-    fechas_nuevas = {f["fecha"] for f in filas_nuevas}
-    filas = [f for f in filas if f.get("fecha") not in fechas_nuevas]
-    filas.extend(filas_nuevas)
+    # Un día vacío que llega de Garmin nunca reemplaza un día que ya tenía datos.
+    previas = {f.get("fecha"): f for f in filas}
+    conservadas = 0
+    for nueva in filas_nuevas:
+        vieja = previas.get(nueva["fecha"])
+        if vieja is not None and not tiene_datos(nueva) and tiene_datos(vieja):
+            conservadas += 1
+            continue
+        previas[nueva["fecha"]] = nueva
+    filas = list(previas.values())
+    if conservadas:
+        print(f"Se conservaron {conservadas} día(s) que ya tenían datos (Garmin los devolvió vacíos).")
     filas.sort(key=lambda f: f["fecha"])
 
     print("Actualizando historial en Drive...")
