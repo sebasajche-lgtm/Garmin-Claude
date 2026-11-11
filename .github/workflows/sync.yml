@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       fecha_inicio:
-        description: "Fecha inicio (YYYY-MM-DD). Dejar vacío para correr solo ayer."
+        description: "Fecha inicio (YYYY-MM-DD). Dejar vacío para correr los últimos 7 días."
         required: false
         default: ""
       fecha_fin:
@@ -26,9 +26,6 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -75,5 +72,15 @@ jobs:
         with:
           path: _site
 
+  # Publicar en un trabajo aparte (patrón recomendado por GitHub): así el paquete
+  # del dashboard ya está registrado cuando se publica, y si la publicación falla
+  # se puede reintentar sin repetir la sincronización con Garmin.
+  deploy:
+    needs: sync
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
