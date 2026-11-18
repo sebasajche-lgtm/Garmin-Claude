@@ -343,6 +343,7 @@ AREA_POR_SESION = {
     "trote_z2": "Aeróbico",
     "bici_z2": "Aeróbico",
     "bici_int": "Aeróbico",
+    "cuestas": "Cuestas",
     "fondo_plano": "Deriva del domingo",
     "fondo_opc": "Fondo (opcional)",
     "ruck": "Ruck",
@@ -350,7 +351,7 @@ AREA_POR_SESION = {
     "gym_A": "Gym",
     "gym_B": "Gym",
 }
-ORDEN_AREAS = ["Aeróbico", "Deriva del domingo", "Fondo (opcional)", "Ruck", "Desnivel", "Gym", "Recuperación"]
+ORDEN_AREAS = ["Aeróbico", "Cuestas", "Deriva del domingo", "Fondo (opcional)", "Ruck", "Desnivel", "Gym", "Recuperación"]
 SESIONES_Z2 = ("trote_montana", "fondo_plano", "trote_z2", "fondo_opc")
 DIAS_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 
