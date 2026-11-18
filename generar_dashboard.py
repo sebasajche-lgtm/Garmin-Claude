@@ -29,7 +29,7 @@ HITOS = [
     ("Ultra de los Dioses 42k (tentativa)", "2027-09-05"), ("UTG 100k", "2027-11-20"),
 ]
 
-PIE = {"running", "trail_running", "treadmill_running", "walking", "mountaineering", "other"}
+PIE = {"running", "trail_running", "treadmill_running", "walking", "hiking", "rucking", "mountaineering", "other"}
 BICI = {"cycling", "indoor_cycling"}
 CORRER = {"running", "trail_running", "treadmill_running"}
 
